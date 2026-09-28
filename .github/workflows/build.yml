@@ -1,6 +1,7 @@
 # Synced from https://github.com/curiosus-dev/dotnet-tools, do not edit in place.
-# Runs the same Cake pipeline as a local `dotnet cake`. Pushes to the default branch are
-# covered by release-packages.yml, which runs the same build and tests before publishing.
+# Runs the same Cake pipeline as a local `dotnet cake --target=CoverageReport`: build, tests and a coverage report
+# in the run summary. Pushes to the default branch are covered by release-packages.yml, which runs the same
+# build and tests before publishing and updates the coverage badge.
 
 name: Build and test
 
@@ -30,4 +31,10 @@ jobs:
       - name: Restore tools
         run: dotnet tool restore
       - name: Build and test
-        run: dotnet cake --target=Default
+        run: dotnet cake --target=CoverageReport
+      - name: Coverage summary
+        run: cat artifacts/coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: artifacts/coverage-report/
