@@ -19,7 +19,8 @@
 //   UnitTests        - runs test projects except integration ones
 //   IntegrationTests - runs integration test projects
 //   CoverageReport   - Default with coverage + report of ./src assemblies in ./artifacts/coverage-report
-//                      (HTML, text, GitHub Markdown and JSON summaries)
+//                      (HTML, text, GitHub Markdown and JSON summaries) and shields.io endpoint badges in
+//                      ./artifacts/coverage-report/badges: coverage.json and <PackageId>.json per package
 //   Pack             - packs every ./src/**/*.csproj into ./artifacts/packages
 //   NuGetPush        - pushes packages to nuget.org, already published versions are skipped;
 //                      API key is taken from NUGET_API_KEY (short-lived key from NuGet Trusted Publishing on CI)
@@ -131,6 +132,8 @@ Task("CoverageReport")
                 FormattableString.Invariant($"Line coverage {lineCoverage}% is below the minimum of {threshold}%."));
 
         Information(FormattableString.Invariant($"Line coverage: {lineCoverage}% (minimum {threshold}%)."));
+
+        WriteCoverageBadges(summary.RootElement, lineCoverage);
     });
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -291,20 +294,12 @@ FilePathCollection GetPackages()
 }
 
 // PackageId may differ from the project name (e.g. Curiosus.Configuration.YAML -> Curiosus.Configuration.YML).
-Dictionary<string, DirectoryPath> GetProjectDirectoriesByPackageId()
-{
-    var result = new Dictionary<string, DirectoryPath>(StringComparer.OrdinalIgnoreCase);
-    foreach (var project in GetFiles("./src/**/*.csproj"))
-    {
-        if (String.Equals(ReadProjectProperty(project, "IsPackable"), "false", StringComparison.OrdinalIgnoreCase))
-            continue;
+Dictionary<string, DirectoryPath> GetProjectDirectoriesByPackageId() => GetPackableProjects()
+    .ToDictionary(x => x.PackageId, x => x.Project.GetDirectory(), StringComparer.OrdinalIgnoreCase);
 
-        var packageId = ReadProjectProperty(project, "PackageId") ?? ReadAssemblyName(project);
-        result[packageId] = project.GetDirectory();
-    }
-
-    return result;
-}
+IEnumerable<(FilePath Project, string PackageId)> GetPackableProjects() => GetFiles("./src/**/*.csproj")
+    .Where(x => !String.Equals(ReadProjectProperty(x, "IsPackable"), "false", StringComparison.OrdinalIgnoreCase))
+    .Select(x => (x, ReadProjectProperty(x, "PackageId") ?? ReadAssemblyName(x)));
 
 string ReadAssemblyName(FilePath project) =>
     ReadProjectProperty(project, "AssemblyName") ?? project.GetFilenameWithoutExtension().ToString();
@@ -314,6 +309,39 @@ string ReadProjectProperty(FilePath project, string name) => XDocument.Load(proj
     .Where(x => x.Name.LocalName == name)
     .Select(x => x.Value.Trim())
     .FirstOrDefault(x => x.Length > 0);
+
+// Packages whose assemblies were never loaded by tests are missing from the report and get a "no tests" badge.
+void WriteCoverageBadges(JsonElement summary, double lineCoverage)
+{
+    var badgesDir = artifactsDir.Combine("coverage-report").Combine("badges");
+    EnsureDirectoryExists(badgesDir);
+
+    var coverageByAssembly = summary.GetProperty("coverage").GetProperty("assemblies").EnumerateArray()
+        .Where(x => x.GetProperty("coverage").ValueKind == JsonValueKind.Number)
+        .ToDictionary(x => x.GetProperty("name").GetString(), x => x.GetProperty("coverage").GetDouble());
+
+    WriteCoverageBadge(badgesDir.CombineWithFilePath("coverage.json"), lineCoverage);
+    foreach (var (project, packageId) in GetPackableProjects())
+    {
+        var coverage = coverageByAssembly.TryGetValue(ReadAssemblyName(project), out var value) ? value : (double?)null;
+        WriteCoverageBadge(badgesDir.CombineWithFilePath($"{packageId}.json"), coverage);
+    }
+}
+
+void WriteCoverageBadge(FilePath path, double? coverage)
+{
+    var (message, color) = coverage switch
+    {
+        null => ("no tests", "lightgrey"),
+        >= 80 => (FormattableString.Invariant($"{coverage}%"), "brightgreen"),
+        >= 60 => (FormattableString.Invariant($"{coverage}%"), "yellow"),
+        >= 40 => (FormattableString.Invariant($"{coverage}%"), "orange"),
+        _ => (FormattableString.Invariant($"{coverage}%"), "red")
+    };
+
+    var badge = new { schemaVersion = 1, label = "coverage", message, color };
+    System.IO.File.WriteAllText(path.FullPath, JsonSerializer.Serialize(badge));
+}
 
 (string PackageId, string Version) ReadPackageIdentity(FilePath nupkg)
 {
