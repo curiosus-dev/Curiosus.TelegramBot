@@ -17,14 +17,14 @@
     <!--
         Package metadata shared by all Curiosus packages. A project with more authors keeps them:
         <Authors>$(CuriosusAuthors), Jane Doe (@jane)</Authors>
-        Copyright belongs to the authors, so it names the contributors, not the organization; original notices
-        of forked code stay in LICENSE.
+        Copyright matches LICENSE: the maintainer and contributors (the organization is not a legal entity);
+        original notices of forked code stay in LICENSE.
     -->
     <PropertyGroup>
         <CuriosusAuthors>Curiosus Dev, Maxim Markelow (@markeli)</CuriosusAuthors>
         <Authors>$(CuriosusAuthors)</Authors>
         <Company>Curiosus Dev</Company>
-        <Copyright>Copyright © $([System.DateTime]::UtcNow.Year) Curiosus Dev contributors</Copyright>
+        <Copyright>Copyright © $([System.DateTime]::UtcNow.Year) Maxim Markelow and contributors</Copyright>
         <PackageIcon>curiosus-icon.png</PackageIcon>
     </PropertyGroup>
     <ItemGroup>
