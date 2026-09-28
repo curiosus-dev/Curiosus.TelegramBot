@@ -1,19 +1,42 @@
 # Synced from https://github.com/curiosus-dev/dotnet-tools, do not edit in place.
 #
-# Only NuGet packages of the library are updated here. Workflows and build tools
-# (.github/workflows/build.yml, release-packages.yml, .config/dotnet-tools.json) are synced files:
-# they are updated in dotnet-tools, otherwise the next sync would revert the update.
+# Library dependencies get security updates only: a dependency version in a package is the minimum version for its
+# consumers, so routine bumps would force them to upgrade. Test dependencies don't reach consumers and are kept fresh.
+#
+# Workflows and build tools (.github/workflows/build.yml, release-packages.yml, .config/dotnet-tools.json) are synced
+# files: they are updated in dotnet-tools, otherwise the next sync would revert the update.
 version: 2
 
 updates:
+  # Security updates for everything. `allow` and `ignore` would restrict security updates too,
+  # so only the limit (which applies to version updates alone) is set here.
   - package-ecosystem: nuget
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     ignore:
       - dependency-name: cake.tool
       - dependency-name: dotnet-reportgenerator-globaltool
     groups:
-      minor-and-patch:
+      security:
+        applies-to: security-updates
+        patterns: [ "*" ]
+
+  # Version updates for test-only packages. Packages that libraries use too (Microsoft.Extensions.*, EF Core, ...)
+  # are not listed: with central package management tests and libraries share their versions.
+  - package-ecosystem: nuget
+    directory: /tests
+    schedule:
+      interval: monthly
+    allow:
+      - dependency-name: Microsoft.NET.Test.Sdk
+      - dependency-name: xunit*
+      - dependency-name: coverlet.*
+      - dependency-name: Moq
+      - dependency-name: FluentAssertions
+      - dependency-name: Testcontainers*
+    groups:
+      test-dependencies:
+        applies-to: version-updates
         update-types: [ minor, patch ]

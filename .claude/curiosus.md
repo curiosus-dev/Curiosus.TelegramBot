@@ -50,6 +50,8 @@ Tags are `v<version>` in single-package repositories and `<PackageId>.v<version>
 - Async methods accept a `CancellationToken`.
 - Comment only non-obvious reasoning.
 - Package versions are central (`Directory.Packages.props`) where the repository uses central package management.
+- Don't bump dependencies of the libraries without a reason (a security fix or a needed feature): a dependency
+  version is the minimum version for consumers. Test-only dependencies can be updated freely.
 
 ## Shared files
 
