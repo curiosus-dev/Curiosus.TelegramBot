@@ -1,0 +1,19 @@
+# Synced from https://github.com/curiosus-dev/dotnet-tools, do not edit in place.
+#
+# Only NuGet packages of the library are updated here. Workflows and build tools
+# (.github/workflows/build.yml, release-packages.yml, .config/dotnet-tools.json) are synced files:
+# they are updated in dotnet-tools, otherwise the next sync would revert the update.
+version: 2
+
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: cake.tool
+      - dependency-name: dotnet-reportgenerator-globaltool
+    groups:
+      minor-and-patch:
+        update-types: [ minor, patch ]
