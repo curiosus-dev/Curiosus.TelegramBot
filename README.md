@@ -1,19 +1,27 @@
 # Curiosus.TelegramBot
 
-> **Renamed:** formerly `Markeli.TelegramBot`. Since 2.0.0 the package is published as `Curiosus.TelegramBot`
-> by [curiosus-dev](https://www.nuget.org/profiles/curiosus-dev). To migrate, update the package reference and replace the `Markeli.TelegramBot` namespace.
+Infrastructure library for building Telegram bots on .NET: command dispatching, multi-step state management, update queue with persistence, and simple chat authentication.
 
-[![Release](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml/badge.svg?branch=main)](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml)
-[![NuGet](https://img.shields.io/nuget/v/Curiosus.TelegramBot)](https://www.nuget.org/packages/Curiosus.TelegramBot)
+[![Build](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml/badge.svg?branch=main)](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml)
+[![License](https://img.shields.io/github/license/curiosus-dev/Curiosus.TelegramBot)](https://github.com/curiosus-dev/Curiosus.TelegramBot/blob/main/LICENSE)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/Curiosus.TelegramBot)](https://www.nuget.org/packages/Curiosus.TelegramBot)
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/curiosus-dev/Curiosus.TelegramBot/badges/coverage.json)](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml)
 
-Infrastructure library for building Telegram bots on .NET: command dispatching, multi-step state management, update queue with persistence, and simple chat authentication.
+> **Renamed:** formerly `Markeli.TelegramBot`. Since 2.0.0 the package is published as `Curiosus.TelegramBot`
+> by [curiosus-dev](https://www.nuget.org/profiles/curiosus-dev). To migrate, update the package reference and replace the `Markeli.TelegramBot` namespace.
 
-## Prerequisites
+## Why use it
 
-- [.NET 8.0](https://dotnet.microsoft.com/download/dotnet/8.0) or later
-- Telegram Bot API token — create one via [BotFather](https://core.telegram.org/bots#botfather)
+Telegram.Bot gives you the Bot API; a real bot also needs the plumbing around it. Curiosus.TelegramBot provides it,
+so a bot is a set of command handlers and nothing else:
+
+- **Commands, not update loops** — implement `ITelegramBotCommandHandler` per command, routing by command text and
+  message type is done for you.
+- **Conversations out of the box** — return a state and the next message of the chat comes back to the same handler.
+- **Safe under load** — bounded parallelism, optional per-key locks for commands that must not run concurrently,
+  and pending updates survive a graceful restart when queue persistence is on.
+- **Private bots in one line** — allowed chat IDs and a password challenge for everyone else.
+- **Zero startup code** — the bot runs as an `IHostedService` registered by `AddTelegramBotInfrastructure`.
 
 ## Features
 
@@ -25,36 +33,20 @@ Infrastructure library for building Telegram bots on .NET: command dispatching, 
 - **Rich message support** — rich formatted messages (Bot API 10.1) are routed like plain text via `Update.GetMessageText()`, with structured blocks available through `Update.GetRichBlocks()`.
 - **DI integration** — `AddTelegramBotInfrastructure` / `AddTelegramBotCommandHandler<T>` extensions for `IServiceCollection`.
 
-## Architecture
+## Quick start
 
-```
-Telegram API
-    │ polling via Telegram.Bot
-    ▼
-TelegramBotUpdateDispatcher          (IHostedService — starts polling, runs dispatch loop)
-    ├─ on receive ──► TelegramUpdateQueue.Enqueue()
-    └─ dispatch loop
-         ├─ TelegramUpdateQueue.Take()
-         ├─ ResolveCommand()           (state-cache aware routing)
-         ├─ TryAcquireLock()           (optional per-key exclusive lock)
-         ├─ SemaphoreSlim              (MaxDegreeOfParallelism)
-         └─► TelegramUpdateProcessor.ProcessAsync()
-              ├─ Auth gate             (AllowedChatIds / password challenge)
-              ├─ Message type guard
-              ├─ State lookup          (TelegramBotCommandStateCache)
-              ├─ ITelegramBotCommandHandler.ProcessCommandAsync()
-              └─ State update/remove   (based on result.State)
-```
+### Prerequisites
 
-Updates are polled, enqueued into a thread-safe `BlockingCollection<Update>`, and dispatched to handlers with configurable concurrency (`MaxDegreeOfParallelism`, default 10). If a handler returns state, the next message from that chat is routed to the same handler automatically.
+- [.NET 8.0](https://dotnet.microsoft.com/download/dotnet/8.0) or later
+- Telegram Bot API token — create one via [BotFather](https://core.telegram.org/bots#botfather)
 
-## Installation
+### Installation
 
 ```bash
 dotnet add package Curiosus.TelegramBot
 ```
 
-## Quick start
+### Usage
 
 Register the infrastructure and command handlers in your DI container:
 
@@ -93,6 +85,28 @@ public class PingCommandHandler : ITelegramBotCommandHandler
 
 The bot starts automatically as an `IHostedService` — no extra startup code required.
 
+## Architecture
+
+```
+Telegram API
+    │ polling via Telegram.Bot
+    ▼
+TelegramBotUpdateDispatcher          (IHostedService — starts polling, runs dispatch loop)
+    ├─ on receive ──► TelegramUpdateQueue.Enqueue()
+    └─ dispatch loop
+         ├─ TelegramUpdateQueue.Take()
+         ├─ ResolveCommand()           (state-cache aware routing)
+         ├─ TryAcquireLock()           (optional per-key exclusive lock)
+         ├─ SemaphoreSlim              (MaxDegreeOfParallelism)
+         └─► TelegramUpdateProcessor.ProcessAsync()
+              ├─ Auth gate             (AllowedChatIds / password challenge)
+              ├─ Message type guard
+              ├─ State lookup          (TelegramBotCommandStateCache)
+              ├─ ITelegramBotCommandHandler.ProcessCommandAsync()
+              └─ State update/remove   (based on result.State)
+```
+
+Updates are polled, enqueued into a thread-safe `BlockingCollection<Update>`, and dispatched to handlers with configurable concurrency (`MaxDegreeOfParallelism`, default 10). If a handler returns state, the next message from that chat is routed to the same handler automatically.
 ## Configuration
 
 All settings are passed via `TelegramBotOptions`:
@@ -137,7 +151,6 @@ Chats listed in `AllowedChatIds` are authorized automatically. When an unknown c
 1. The bot replies with *"Hi! To use this bot, please, send a verification password."*
 2. If the user sends the correct `Password`, the chat is added to the allowed set for the lifetime of the process. Authorization is stored in memory only and resets on application restart.
 3. If incorrect, the bot replies *"Incorrect password! Please, try again."*
-
 ## Multi-step commands
 
 Return `WithSimpleState()` from `ProcessCommandAsync` to keep the conversation going — the next message from that chat will be routed to the same handler with the previous state:
@@ -174,7 +187,6 @@ public class GreetCommandHandler : ITelegramBotCommandHandler
 For custom state data, implement `ITelegramBotCommandState` (or extend `TelegramBotCommandStateBase` for timestamps) and return it via `new TelegramBotCommandProcessingResult { State = myState }`.
 
 The user can abort a multi-step flow at any time by sending another `/command` — it will be matched to the new handler instead.
-
 ## Rich messages
 
 A rich formatted message (Bot API 10.1) carries its content in `Message.RichMessage` and leaves `Message.Text` unset, so it arrives as `MessageType.RichMessage` rather than `MessageType.Text`.
@@ -208,7 +220,6 @@ await telegramBotClient.SendRichMessage(chatId, new InputRichMessage
 ```
 
 `InputRichMessage` accepts exactly one of `Blocks`, `Html`, or `Markdown`. Use `SendRichMessageDraft` to stream a partial message while it is still being generated.
-
 ## Concurrent lock keys
 
 Override `TryGetLockKey` to prevent parallel execution of the same command for a specific context (e.g., per chat):
@@ -222,7 +233,6 @@ public bool TryGetLockKey(Update telegramUpdate, out string? lockKey)
 ```
 
 When a lock key is active, conflicting updates are re-enqueued and retried. This method has a default implementation that returns `false` (no locking), so most handlers don't need to override it.
-
 ## Build
 
 ```bash
@@ -245,6 +255,12 @@ Build scripts and settings are shared with the other Curiosus libraries via
 Packages are restored exclusively from nuget.org: the repository-level `nuget.config` clears any inherited
 source and maps every package pattern to nuget.org, so restore behaves identically on any machine.
 
+## Available packages
+
+| Package | Version | Downloads | Coverage |
+|---|---|---|---|
+| [Curiosus.TelegramBot](https://github.com/curiosus-dev/Curiosus.TelegramBot#readme) | [![NuGet](https://img.shields.io/nuget/v/Curiosus.TelegramBot)](https://www.nuget.org/packages/Curiosus.TelegramBot) | [![Downloads](https://img.shields.io/nuget/dt/Curiosus.TelegramBot)](https://www.nuget.org/packages/Curiosus.TelegramBot) | [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/curiosus-dev/Curiosus.TelegramBot/badges/coverage.json)](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml) |
+
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/curiosus-dev/Curiosus.TelegramBot/blob/main/LICENSE)
