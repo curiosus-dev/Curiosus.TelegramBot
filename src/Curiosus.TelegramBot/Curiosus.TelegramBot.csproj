@@ -10,7 +10,6 @@
         <RepositoryType>git</RepositoryType>
         <PackageTags>telegram;bot;commands;state-management;dotnet;csharp;telegram-bot-api</PackageTags>
         <PackageReadmeFile>README.md</PackageReadmeFile>
-        <PackageReleaseNotes>See CHANGELOG.md</PackageReleaseNotes>
 
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
     </PropertyGroup>
