@@ -35,8 +35,8 @@ dotnet cake --target=GitHubReleases --exclusive --githubReleaseDryRun
 
 ## Release
 
-`.github/workflows/nuget-publish.yml` runs on every push to `main`: tests, packs, publishes to nuget.org via NuGet Trusted
-Publishing (OIDC, `NuGet/login`, environment `nuget`, secret `NUGET_USER`) and creates a `v<Version>` tag and GitHub release
+`.github/workflows/release-packages.yml` runs on every push to `main`: tests, packs, publishes to nuget.org via NuGet Trusted
+Publishing (OIDC, `NuGet/login`, secret `NUGET_USER`) and creates a `v<Version>` tag and GitHub release
 with notes from the matching `## [x.y.z]` section of `CHANGELOG.md`. An already published version is skipped. To release:
 bump `<Version>` in the csproj and add the CHANGELOG section. Publishing logic lives in `build/publish.cake`, shared verbatim
 with the other Curiosus repositories — do not change it here only.

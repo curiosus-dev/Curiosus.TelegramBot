@@ -1,11 +1,11 @@
 # Shared between Curiosus repositories, keep the file identical everywhere.
 #
-# Publishes packages to nuget.org via NuGet Trusted Publishing (OIDC, no long-lived API keys).
-# nuget.org policy: owner = repository owner, repository = this repository,
-# workflow file = nuget-publish.yml, environment = nuget.
+# Publishes packages to nuget.org via NuGet Trusted Publishing (OIDC, no long-lived API keys)
+# and creates a tag and a GitHub release for every new package version.
+# nuget.org policy: owner = repository owner, repository = this repository, workflow file = release-packages.yml.
 # Required repository secret: NUGET_USER - nuget.org profile name (not an email).
 
-name: Publish NuGet packages
+name: Release packages
 
 on:
   push:
@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: nuget-publish
+  group: release-packages
   cancel-in-progress: false
 
 permissions:
@@ -46,7 +46,6 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    environment: nuget
     permissions:
       contents: write # tags and GitHub releases
       id-token: write # OIDC token for NuGet Trusted Publishing

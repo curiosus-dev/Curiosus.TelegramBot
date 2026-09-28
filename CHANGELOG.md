@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Publishing moved from the `v*` tag workflow (`release.yml`, long-lived `NUGET_API_KEY` secret) to `nuget-publish.yml`: every push to `main` publishes a new `<Version>` via NuGet Trusted Publishing (OIDC) and creates the `v<Version>` tag and GitHub release automatically.
+- Publishing moved from the `v*` tag workflow (`release.yml`, long-lived `NUGET_API_KEY` secret) to `release-packages.yml`: every push to `main` publishes a new `<Version>` via NuGet Trusted Publishing (OIDC) and creates the `v<Version>` tag and GitHub release automatically.
 
 ## [1.0.0] - 2026-08-11
 
