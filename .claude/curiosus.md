@@ -70,7 +70,7 @@ The CHANGELOG is the only place for a version: `build/Curiosus.props` sets `Vers
 `## [x.y.z]` section of its CHANGELOG (`## [Unreleased]` is skipped), so project files have no `<Version>` or
 `<PackageVersion>`, and packing fails without a CHANGELOG version.
 
-`.github/workflows/release-packages.yml` runs on every push to the default branch: build, tests, pack, push to nuget.org
+`.github/workflows/release-packages.yml` runs on every push to `main` (the default branch of every repository): build, tests, pack, push to nuget.org
 via NuGet Trusted Publishing (no API keys), then a tag and a GitHub release for every package version that has none.
 Versions already on nuget.org are skipped.
 
@@ -88,7 +88,7 @@ CHANGELOG rules:
 The `release-check` job of the pull request build (`ReleaseCheck`) keeps a comment on the pull request listing the changed
 packages: released by the merge, with a changelog entry to release later, or ⚠️ without a changelog entry. It never
 blocks the merge: changes consumers won't notice need no entry. Pull requests from forks get it in the run summary only.
-Locally: `dotnet cake --target=ReleaseCheck --since=origin/master`.
+Locally: `dotnet cake --target=ReleaseCheck --since=origin/main`.
 
 Tags are `v<version>` in single-package repositories and `<PackageId>.v<version>` otherwise.
 
