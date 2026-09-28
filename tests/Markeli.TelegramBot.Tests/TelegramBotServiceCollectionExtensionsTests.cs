@@ -10,191 +10,191 @@ namespace Markeli.TelegramBot.Tests;
 
 public class TelegramBotServiceCollectionExtensionsTests
 {
-	// Telegram.Bot validates the "{botId}:{secret}" token shape when the client is constructed.
-	private const string TestApiToken = "123456:test-token";
+    // Telegram.Bot validates the "{botId}:{secret}" token shape when the client is constructed.
+    private const string TestApiToken = "123456:test-token";
 
-	private static TelegramBotOptions CreateValidOptions() => new()
-	{
-		ApiToken = TestApiToken,
-		Password = "test-password"
-	};
+    private static TelegramBotOptions CreateValidOptions() => new()
+    {
+        ApiToken = TestApiToken,
+        Password = "test-password"
+    };
 
-	[Fact]
-	public void AddTelegramBotInfrastructure_RegistersAllRequiredServices()
-	{
-		var services = new ServiceCollection();
-		services.AddLogging();
+    [Fact]
+    public void AddTelegramBotInfrastructure_RegistersAllRequiredServices()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
 
-		services.AddTelegramBotInfrastructure(CreateValidOptions());
+        services.AddTelegramBotInfrastructure(CreateValidOptions());
 
-		var provider = services.BuildServiceProvider();
+        var provider = services.BuildServiceProvider();
 
-		Assert.NotNull(provider.GetService<TelegramBotOptions>());
-		Assert.NotNull(provider.GetService<IMemoryCache>());
-		Assert.NotNull(provider.GetService<ITelegramBotClient>());
-		Assert.NotNull(provider.GetService<TelegramUpdateQueue>());
-		Assert.NotNull(provider.GetService<TelegramBotCommandStateCache>());
-		Assert.NotNull(provider.GetService<TelegramUpdateProcessor>());
-	}
+        Assert.NotNull(provider.GetService<TelegramBotOptions>());
+        Assert.NotNull(provider.GetService<IMemoryCache>());
+        Assert.NotNull(provider.GetService<ITelegramBotClient>());
+        Assert.NotNull(provider.GetService<TelegramUpdateQueue>());
+        Assert.NotNull(provider.GetService<TelegramBotCommandStateCache>());
+        Assert.NotNull(provider.GetService<TelegramUpdateProcessor>());
+    }
 
-	[Fact]
-	public void AddTelegramBotInfrastructure_RegistersDispatcherAsHostedService()
-	{
-		var services = new ServiceCollection();
-		services.AddLogging();
+    [Fact]
+    public void AddTelegramBotInfrastructure_RegistersDispatcherAsHostedService()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
 
-		services.AddTelegramBotInfrastructure(CreateValidOptions());
+        services.AddTelegramBotInfrastructure(CreateValidOptions());
 
-		var provider = services.BuildServiceProvider();
-		var hostedServices = provider.GetServices<IHostedService>();
-		Assert.Contains(hostedServices, s => s is TelegramBotUpdateDispatcher);
-	}
+        var provider = services.BuildServiceProvider();
+        var hostedServices = provider.GetServices<IHostedService>();
+        Assert.Contains(hostedServices, s => s is TelegramBotUpdateDispatcher);
+    }
 
-	[Fact]
-	public void AddTelegramBotInfrastructure_WithInvalidOptions_Throws()
-	{
-		var services = new ServiceCollection();
-		var invalidOptions = new TelegramBotOptions
-		{
-			ApiToken = "",
-			Password = ""
-		};
+    [Fact]
+    public void AddTelegramBotInfrastructure_WithInvalidOptions_Throws()
+    {
+        var services = new ServiceCollection();
+        var invalidOptions = new TelegramBotOptions
+        {
+            ApiToken = "",
+            Password = ""
+        };
 
-		Assert.Throws<InvalidOperationException>(() =>
-			services.AddTelegramBotInfrastructure(invalidOptions));
-	}
+        Assert.Throws<InvalidOperationException>(() =>
+            services.AddTelegramBotInfrastructure(invalidOptions));
+    }
 
-	[Fact]
-	public void AddTelegramBotInfrastructure_WithMalformedApiToken_ThrowsAtRegistrationTime()
-	{
-		var services = new ServiceCollection();
-		var options = new TelegramBotOptions
-		{
-			ApiToken = "no-bot-id-prefix",
-			Password = "test-password"
-		};
+    [Fact]
+    public void AddTelegramBotInfrastructure_WithMalformedApiToken_ThrowsAtRegistrationTime()
+    {
+        var services = new ServiceCollection();
+        var options = new TelegramBotOptions
+        {
+            ApiToken = "no-bot-id-prefix",
+            Password = "test-password"
+        };
 
-		Assert.Throws<ArgumentException>(() => services.AddTelegramBotInfrastructure(options));
-	}
+        Assert.Throws<ArgumentException>(() => services.AddTelegramBotInfrastructure(options));
+    }
 
-	[Fact]
-	public void AddTelegramBotInfrastructure_WithNullServices_Throws()
-	{
-		Assert.Throws<ArgumentNullException>(() =>
-			TelegramBotServiceCollectionExtensions.AddTelegramBotInfrastructure(null!, CreateValidOptions()));
-	}
+    [Fact]
+    public void AddTelegramBotInfrastructure_WithNullServices_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            TelegramBotServiceCollectionExtensions.AddTelegramBotInfrastructure(null!, CreateValidOptions()));
+    }
 
-	[Fact]
-	public void AddTelegramBotInfrastructure_WithNullOptions_Throws()
-	{
-		var services = new ServiceCollection();
+    [Fact]
+    public void AddTelegramBotInfrastructure_WithNullOptions_Throws()
+    {
+        var services = new ServiceCollection();
 
-		Assert.Throws<ArgumentNullException>(() =>
-			services.AddTelegramBotInfrastructure(null!));
-	}
+        Assert.Throws<ArgumentNullException>(() =>
+            services.AddTelegramBotInfrastructure(null!));
+    }
 
-	[Fact]
-	public void AddTelegramBotCommandHandler_RegistersHandler()
-	{
-		var services = new ServiceCollection();
-		services.AddLogging();
-		services.AddTelegramBotInfrastructure(CreateValidOptions());
+    [Fact]
+    public void AddTelegramBotCommandHandler_RegistersHandler()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddTelegramBotInfrastructure(CreateValidOptions());
 
-		services.AddTelegramBotCommandHandler<TestCommandHandler>();
+        services.AddTelegramBotCommandHandler<TestCommandHandler>();
 
-		var provider = services.BuildServiceProvider();
-		var handlers = provider.GetServices<ITelegramBotCommandHandler>();
-		Assert.Contains(handlers, h => h is TestCommandHandler);
-	}
+        var provider = services.BuildServiceProvider();
+        var handlers = provider.GetServices<ITelegramBotCommandHandler>();
+        Assert.Contains(handlers, h => h is TestCommandHandler);
+    }
 
-	[Fact]
-	public void AddTelegramBotCommandHandler_WithNullServices_Throws()
-	{
-		Assert.Throws<ArgumentNullException>(() =>
-			TelegramBotServiceCollectionExtensions.AddTelegramBotCommandHandler<TestCommandHandler>(null!));
-	}
+    [Fact]
+    public void AddTelegramBotCommandHandler_WithNullServices_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            TelegramBotServiceCollectionExtensions.AddTelegramBotCommandHandler<TestCommandHandler>(null!));
+    }
 
-	[Fact]
-	public void AddTelegramBotInfrastructure_WithHttpProxy_RegistersBotClient()
-	{
-		var services = new ServiceCollection();
-		services.AddLogging();
-		var options = new TelegramBotOptions
-		{
-			ApiToken = TestApiToken,
-			Password = "test-password",
-			HttpProxy = new HttpProxyOptions { Url = "http://proxy.example.com:8080" }
-		};
+    [Fact]
+    public void AddTelegramBotInfrastructure_WithHttpProxy_RegistersBotClient()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        var options = new TelegramBotOptions
+        {
+            ApiToken = TestApiToken,
+            Password = "test-password",
+            HttpProxy = new HttpProxyOptions { Url = "http://proxy.example.com:8080" }
+        };
 
-		services.AddTelegramBotInfrastructure(options);
+        services.AddTelegramBotInfrastructure(options);
 
-		var provider = services.BuildServiceProvider();
-		Assert.NotNull(provider.GetService<ITelegramBotClient>());
-	}
+        var provider = services.BuildServiceProvider();
+        Assert.NotNull(provider.GetService<ITelegramBotClient>());
+    }
 
-	[Fact]
-	public void AddTelegramBotInfrastructure_WithHttpProxyCredentials_RegistersBotClient()
-	{
-		var services = new ServiceCollection();
-		services.AddLogging();
-		var options = new TelegramBotOptions
-		{
-			ApiToken = TestApiToken,
-			Password = "test-password",
-			HttpProxy = new HttpProxyOptions
-			{
-				Url = "http://proxy.example.com:8080",
-				Username = "user",
-				Password = "pass"
-			}
-		};
+    [Fact]
+    public void AddTelegramBotInfrastructure_WithHttpProxyCredentials_RegistersBotClient()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        var options = new TelegramBotOptions
+        {
+            ApiToken = TestApiToken,
+            Password = "test-password",
+            HttpProxy = new HttpProxyOptions
+            {
+                Url = "http://proxy.example.com:8080",
+                Username = "user",
+                Password = "pass"
+            }
+        };
 
-		services.AddTelegramBotInfrastructure(options);
+        services.AddTelegramBotInfrastructure(options);
 
-		var provider = services.BuildServiceProvider();
-		Assert.NotNull(provider.GetService<ITelegramBotClient>());
-	}
+        var provider = services.BuildServiceProvider();
+        Assert.NotNull(provider.GetService<ITelegramBotClient>());
+    }
 
-	[Fact]
-	public void AddTelegramBotInfrastructure_WithInvalidHttpProxy_Throws()
-	{
-		var services = new ServiceCollection();
-		var options = new TelegramBotOptions
-		{
-			ApiToken = TestApiToken,
-			Password = "test-password",
-			HttpProxy = new HttpProxyOptions { Url = "not-a-url" }
-		};
+    [Fact]
+    public void AddTelegramBotInfrastructure_WithInvalidHttpProxy_Throws()
+    {
+        var services = new ServiceCollection();
+        var options = new TelegramBotOptions
+        {
+            ApiToken = TestApiToken,
+            Password = "test-password",
+            HttpProxy = new HttpProxyOptions { Url = "not-a-url" }
+        };
 
-		Assert.Throws<InvalidOperationException>(() =>
-			services.AddTelegramBotInfrastructure(options));
-	}
+        Assert.Throws<InvalidOperationException>(() =>
+            services.AddTelegramBotInfrastructure(options));
+    }
 
-	[Fact]
-	public void AddTelegramBotInfrastructure_ReturnsSameServiceCollection()
-	{
-		var services = new ServiceCollection();
-		services.AddLogging();
+    [Fact]
+    public void AddTelegramBotInfrastructure_ReturnsSameServiceCollection()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
 
-		var result = services.AddTelegramBotInfrastructure(CreateValidOptions());
+        var result = services.AddTelegramBotInfrastructure(CreateValidOptions());
 
-		Assert.Same(services, result);
-	}
+        Assert.Same(services, result);
+    }
 
-	private class TestCommandHandler : ITelegramBotCommandHandler
-	{
-		public string CommandName => "Test";
-		public string CommandText => "/test";
-		public IReadOnlySet<UpdateType> SupportedUpdateTypes => new HashSet<UpdateType> { UpdateType.Message };
-		public IReadOnlySet<MessageType> SupportedMessageTypes => new HashSet<MessageType> { MessageType.Text };
+    private class TestCommandHandler : ITelegramBotCommandHandler
+    {
+        public string CommandName => "Test";
+        public string CommandText => "/test";
+        public IReadOnlySet<UpdateType> SupportedUpdateTypes => new HashSet<UpdateType> { UpdateType.Message };
+        public IReadOnlySet<MessageType> SupportedMessageTypes => new HashSet<MessageType> { MessageType.Text };
 
-		public Task<TelegramBotCommandProcessingResult> ProcessCommandAsync(
-			ITelegramBotClient telegramBotClient,
-			Update telegramUpdate,
-			ITelegramBotCommandState? commandState,
-			CancellationToken cancellationToken = default)
-		{
-			return Task.FromResult(TelegramBotCommandProcessingResult.WithoutState());
-		}
-	}
+        public Task<TelegramBotCommandProcessingResult> ProcessCommandAsync(
+            ITelegramBotClient telegramBotClient,
+            Update telegramUpdate,
+            ITelegramBotCommandState? commandState,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(TelegramBotCommandProcessingResult.WithoutState());
+        }
+    }
 }
