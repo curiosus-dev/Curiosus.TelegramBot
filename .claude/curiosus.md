@@ -58,8 +58,11 @@ Change them there, local edits are overwritten by the next sync:
 
 - `.editorconfig`, `nuget.config`, `.config/dotnet-tools.json`
 - `build/curiosus.cake`, `build/Curiosus.props`
-- `.github/workflows/build.yml`, `.github/workflows/release-packages.yml`
+- `.github/workflows/build.yml`, `.github/workflows/release-packages.yml`, `.github/dependabot.yml`
 - `.claude/curiosus.md`
+
+Repository settings (rulesets, allowed actions, security features) are managed from `dotnet-tools/settings`,
+don't change them in the repository settings UI. Actions in workflows must be pinned to a commit SHA.
 
 Repository-specific build steps go to the repository `build.cake` (after `#load "build/curiosus.cake"`),
 repository-specific MSBuild settings go to `Directory.Build.props` (after importing `build/Curiosus.props`).
