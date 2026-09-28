@@ -14,6 +14,23 @@
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     </PropertyGroup>
 
+    <!--
+        Package metadata shared by all Curiosus packages. A project with more authors keeps them:
+        <Authors>$(CuriosusAuthors), Jane Doe (@jane)</Authors>
+        Copyright belongs to the authors, so it names the contributors, not the organization; original notices
+        of forked code stay in LICENSE.
+    -->
+    <PropertyGroup>
+        <CuriosusAuthors>Curiosus Dev, Maxim Markelow (@markeli)</CuriosusAuthors>
+        <Authors>$(CuriosusAuthors)</Authors>
+        <Company>Curiosus Dev</Company>
+        <Copyright>Copyright © $([System.DateTime]::UtcNow.Year) Curiosus Dev contributors</Copyright>
+        <PackageIcon>curiosus-icon.png</PackageIcon>
+    </PropertyGroup>
+    <ItemGroup>
+        <None Include="$(MSBuildThisFileDirectory)curiosus-icon.png" Pack="true" PackagePath="/" Visible="false" />
+    </ItemGroup>
+
     <!-- A README.md next to the project is the package readme on nuget.org. -->
     <PropertyGroup Condition="Exists('$(MSBuildProjectDirectory)/README.md')">
         <PackageReadmeFile>README.md</PackageReadmeFile>
