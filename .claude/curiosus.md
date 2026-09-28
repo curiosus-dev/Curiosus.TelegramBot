@@ -85,9 +85,10 @@ CHANGELOG rules:
   `## [x.y.z] - yyyy-mm-dd` (today's date), choosing the bump from its entries by SemVer; the section becomes
   the release notes.
 
-The pull request build lists the packages the merge releases (`ReleaseCheck`, in the run summary) and warns about
-changed packages whose version is already published. The warning doesn't block the merge: changes that need no release
-(docs, refactoring) can go without one. Locally: `dotnet cake --target=ReleaseCheck --since=origin/master`.
+The `release-check` job of the pull request build (`ReleaseCheck`) keeps a comment on the pull request listing the changed
+packages: released by the merge, with a changelog entry to release later, or ⚠️ without a changelog entry. It never
+blocks the merge: changes consumers won't notice need no entry. Pull requests from forks get it in the run summary only.
+Locally: `dotnet cake --target=ReleaseCheck --since=origin/master`.
 
 Tags are `v<version>` in single-package repositories and `<PackageId>.v<version>` otherwise.
 

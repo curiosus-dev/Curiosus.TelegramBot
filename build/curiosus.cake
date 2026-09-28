@@ -26,9 +26,10 @@
 //                      API key is taken from NUGET_API_KEY (short-lived key from NuGet Trusted Publishing on CI)
 //   GitHubReleases   - creates a tag and a GitHub release for every package version without one
 //   Publish          - NuGetPush + GitHubReleases
-//   ReleaseCheck     - lists packages changed since --since and whether the merge releases them (their version
-//                      is not on nuget.org yet); warns about changed ones that won't be released, never fails.
-//                      Writes ./artifacts/release-check.md
+//   ReleaseCheck     - lists packages changed since --since: released by the merge (version not on nuget.org yet),
+//                      with a changelog entry to release later, or without one (a warning); never fails.
+//                      Writes ./artifacts/release-check.md (the pull request comment) and changed=true|false
+//                      to GITHUB_OUTPUT
 //
 // Arguments:
 //   --target=Default
@@ -47,6 +48,7 @@
 
 using System.IO.Compression;
 using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
 
@@ -246,48 +248,78 @@ Task("Publish")
     .IsDependentOn("NuGetPush")
     .IsDependentOn("GitHubReleases");
 
-// A reminder, not a gate: a pull request may change a package without releasing it (docs, refactoring).
+// A reminder, not a gate: a pull request may change a package without a changelog entry (docs, refactoring).
 Task("ReleaseCheck")
     .Does(() =>
     {
+        var root = MakeAbsolute(Directory("."));
         var rows = new List<string>();
+        var missingEntries = 0;
         using var http = new HttpClient();
         foreach (var (project, packageId) in GetPackableProjects())
         {
-            var projectDir = MakeAbsolute(Directory(".")).GetRelativePath(project.GetDirectory()).FullPath;
-            if (!Git("diff", "--name-only", $"{releaseCheckSince}...HEAD", "--", projectDir).Any())
+            var projectDir = root.GetRelativePath(project.GetDirectory()).FullPath;
+            var changedFiles = Git("diff", "--name-only", $"{releaseCheckSince}...HEAD", "--", projectDir).ToList();
+            if (changedFiles.Count == 0)
                 continue;
 
             var properties = ReadEvaluatedProperties(project, "PackageVersion", "CuriosusChangelog");
             var version = properties["PackageVersion"];
             var changelog = String.IsNullOrEmpty(properties["CuriosusChangelog"])
-                ? projectDir
-                : MakeAbsolute(Directory(".")).GetRelativePath(File(properties["CuriosusChangelog"])).FullPath;
+                ? null
+                : root.GetRelativePath(File(properties["CuriosusChangelog"])).FullPath;
+            var changelogChanged = changelog != null
+                && Git("diff", "--name-only", $"{releaseCheckSince}...HEAD", "--", changelog).Any();
 
             var published = IsPublishedOnNuGet(http, packageId, version);
+            string status;
             if (published == false)
             {
-                rows.Add($"| {packageId} | {version} | released on merge |");
-                continue;
+                status = $"🚀 released as {version}";
+            }
+            else if (changelogChanged)
+            {
+                status = published == true
+                    ? "📝 changelog entry, released later"
+                    : "⚠️ changelog entry, not checked on nuget.org";
+            }
+            else
+            {
+                status = "⚠️ no changelog entry";
+                missingEntries++;
+                var message = $"{packageId} has changes but no CHANGELOG entry. Add one under '## [Unreleased]', "
+                    + "or a '## [x.y.z]' section to release; ignore if consumers won't notice the change.";
+                Warning(message);
+                // On a changed file: the changelog itself is not in the diff, so an annotation there isn't shown.
+                // Console, not the Cake log: its ANSI colors before "::" break the workflow command.
+                if (EnvironmentVariable("GITHUB_ACTIONS") == "true")
+                    Console.WriteLine($"::warning file={changedFiles[0]},title=No changelog entry::{message}");
             }
 
-            var message = published == true
-                ? $"{packageId} has changes, but {version} is already on nuget.org, so the merge won't release them. "
-                    + "Add a '## [x.y.z]' section to the changelog to release, or ignore if no release is needed."
-                : $"{packageId} has changes; could not check whether {version} is on nuget.org.";
-            var status = published == true ? "already on nuget.org, not released" : "not checked";
-            rows.Add($"| {packageId} | {version} | ⚠️ {status} |");
-            Warning(message);
-            if (EnvironmentVariable("GITHUB_ACTIONS") == "true")
-                Information($"::warning file={changelog},title=Package not released::{message}");
+            rows.Add($"| {packageId} | {version} | {status} |");
         }
 
-        var report = rows.Count == 0
-            ? "### Release check\n\nNo package changes.\n"
-            : "### Release check\n\n| Package | Version | On merge |\n| --- | --- | --- |\n" + String.Join("\n", rows) + "\n";
+        var report = new StringBuilder("<!-- release-check -->\n### Release check\n\n");
+        if (rows.Count == 0)
+        {
+            report.Append("No package changes.\n");
+        }
+        else
+        {
+            if (missingEntries > 0)
+                report.Append($"⚠️ **{missingEntries} changed package(s) without a CHANGELOG entry.** Add the change under ")
+                    .Append("`## [Unreleased]` of the package CHANGELOG, or a `## [x.y.z] - yyyy-mm-dd` section to release it. ")
+                    .Append("Tests, CI and internal refactoring need no entry.\n\n");
+            report.Append("| Package | Version | On merge |\n| --- | --- | --- |\n").AppendJoin("\n", rows).Append('\n');
+        }
+
         EnsureDirectoryExists(artifactsDir);
-        System.IO.File.WriteAllText(artifactsDir.CombineWithFilePath("release-check.md").FullPath, report);
-        Information(report);
+        System.IO.File.WriteAllText(artifactsDir.CombineWithFilePath("release-check.md").FullPath, report.ToString());
+        Information(report.ToString());
+
+        var githubOutput = EnvironmentVariable("GITHUB_OUTPUT");
+        if (!String.IsNullOrEmpty(githubOutput))
+            System.IO.File.AppendAllText(githubOutput, $"changed={(rows.Count > 0 ? "true" : "false")}\n");
     });
 
 ///////////////////////////////////////////////////////////////////////////////
