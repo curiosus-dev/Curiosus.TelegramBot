@@ -4,6 +4,7 @@
   </PropertyGroup>
   <!-- Framework-independent packages -->
   <ItemGroup>
+    <PackageVersion Include="Microsoft.Build.Tasks.Git" Version="10.0.303" />
     <PackageVersion Include="Telegram.Bot" Version="22.10.2.1" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.301" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
