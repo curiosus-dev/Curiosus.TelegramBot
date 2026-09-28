@@ -2,6 +2,8 @@
 #
 # Publishes packages to nuget.org via NuGet Trusted Publishing (OIDC, no long-lived API keys)
 # and creates a tag and a GitHub release for every new package version.
+# Also updates the coverage badge: coverage.json in the `badges` branch, a shields.io endpoint badge
+# https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/<owner>/<repository>/badges/coverage.json
 # nuget.org policy: owner = repository owner, repository = this repository, workflow file = release-packages.yml.
 # Required repository secret: NUGET_USER - nuget.org profile name (not an email).
 
@@ -34,7 +36,11 @@ jobs:
       - name: Restore tools
         run: dotnet tool restore
       - name: Build and test
-        run: dotnet cake --target=Default
+        run: dotnet cake --target=CoverageReport
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: artifacts/coverage-report/
       - name: Pack
         run: dotnet cake --target=Pack
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -72,3 +78,43 @@ jobs:
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
           GH_TOKEN: ${{ github.token }}
+
+  # Separate from publish, so a failed badge update never blocks a release.
+  coverage-badge:
+    needs: build
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commits to the badges branch
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: coverage-report
+          path: ${{ runner.temp }}/coverage-report/
+      - name: Update coverage badge
+        env:
+          SUMMARY: ${{ runner.temp }}/coverage-report/Summary.json
+        run: |
+          coverage=$(jq -r '.summary.linecoverage' "$SUMMARY")
+          color=$(jq -rn --argjson c "$coverage" \
+            'if $c >= 80 then "brightgreen" elif $c >= 60 then "yellow" elif $c >= 40 then "orange" else "red" end')
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch --depth=1 origin badges; then
+            git switch -c badges FETCH_HEAD
+          else
+            git switch --orphan badges
+          fi
+
+          jq -n --arg message "$coverage%" --arg color "$color" \
+            '{schemaVersion: 1, label: "coverage", message: $message, color: $color}' > coverage.json
+          git add coverage.json
+          if git diff --cached --quiet; then
+            echo "Coverage is unchanged: $coverage%"
+            exit 0
+          fi
+          git commit -m "Update coverage badge ($coverage%)"
+          git push origin badges

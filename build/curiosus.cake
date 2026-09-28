@@ -18,7 +18,8 @@
 //   Test             - UnitTests + IntegrationTests
 //   UnitTests        - runs test projects except integration ones
 //   IntegrationTests - runs integration test projects
-//   CoverageReport   - Test with coverage + HTML/text report in ./artifacts/coverage-report
+//   CoverageReport   - Default with coverage + report of ./src assemblies in ./artifacts/coverage-report
+//                      (HTML, text, GitHub Markdown and JSON summaries)
 //   Pack             - packs every ./src/**/*.csproj into ./artifacts/packages
 //   NuGetPush        - pushes packages to nuget.org, already published versions are skipped;
 //                      API key is taken from NUGET_API_KEY (short-lived key from NuGet Trusted Publishing on CI)
@@ -29,20 +30,27 @@
 //   --target=Default
 //   --configuration=Release
 //   --framework=net10.0       limits build and tests to a single target framework
-//   --coverage=true           collects coverage with coverlet.msbuild into ./artifacts/coverage
+//   --coverage=true           collects Cobertura coverage into ./artifacts/coverage with Microsoft Code Coverage
+//                             (comes with Microsoft.NET.Test.Sdk, test projects need no extra packages)
+//   --minCoverage=70          CoverageReport fails below this line coverage, %; the repository default is set
+//                             in build.cake after #load: `minLineCoverage = 70;` (0 - no check)
 //   --releaseTagFormat=auto   auto: "v{version}" for single-package repositories, "{id}.v{version}" otherwise
 //   --githubReleaseDryRun     writes release notes to ./artifacts/release-notes without creating releases
 ///////////////////////////////////////////////////////////////////////////////
 
 using System.IO.Compression;
+using System.Text.Json;
 using System.Xml.Linq;
 
 var target = Argument<string>("target", "Default");
 var configuration = Argument<string>("configuration", "Release");
 var framework = Argument<string>("framework", "");
-var collectCoverage = Argument<bool>("coverage", false);
+var collectCoverage = Argument<bool>("coverage", false) || target == "CoverageReport";
 var releaseTagFormat = Argument<string>("releaseTagFormat", "auto");
 var githubReleaseDryRun = HasArgument("githubReleaseDryRun");
+
+// Set by the repository build.cake, read when CoverageReport runs, so --minCoverage still overrides it.
+var minLineCoverage = 0d;
 
 var artifactsDir = MakeAbsolute(Directory("./artifacts"));
 var packagesDir = artifactsDir.Combine("packages");
@@ -87,26 +95,42 @@ Task("Default")
     .IsDependentOn("Test");
 
 Task("CoverageReport")
+    .IsDependentOn("Default")
     .Does(() =>
     {
-        collectCoverage = true;
-        CleanDirectory(coverageDir);
-        RunTests(GetTestProjects());
-
         var reports = GetFiles($"{coverageDir}/**/*.cobertura.xml");
         if (reports.Count == 0)
-            throw new CakeException($"No coverage reports found in {coverageDir}. Do test projects reference coverlet.msbuild?");
+            throw new CakeException(
+                $"No coverage reports found in {coverageDir}. Do test projects reference Microsoft.NET.Test.Sdk?");
+
+        // Only the libraries count: test assemblies and third-party assemblies with symbols are left out.
+        var assemblyFilters = GetFiles("./src/**/*.csproj").Select(x => $"+{ReadAssemblyName(x)}");
 
         var exitCode = StartProcess("dotnet", new ProcessSettings
         {
             Arguments = new ProcessArgumentBuilder()
                 .Append("tool").Append("run").Append("reportgenerator")
-                .Append($"-reports:{String.Join(";", reports.Select(x => x.FullPath))}")
-                .Append($"-targetdir:{artifactsDir.Combine("coverage-report")}")
-                .Append("-reporttypes:Html;TextSummary")
+                .AppendQuoted($"-reports:{String.Join(";", reports.Select(x => x.FullPath))}")
+                .AppendQuoted($"-targetdir:{artifactsDir.Combine("coverage-report")}")
+                .AppendQuoted("-reporttypes:Html;TextSummary;MarkdownSummaryGithub;JsonSummary")
+                .AppendQuoted($"-assemblyfilters:{String.Join(";", assemblyFilters)}")
         });
         if (exitCode != 0)
             throw new CakeException($"reportgenerator failed (exit code {exitCode}).");
+
+        var summaryPath = artifactsDir.Combine("coverage-report").CombineWithFilePath("Summary.json").FullPath;
+        using var summary = JsonDocument.Parse(System.IO.File.ReadAllText(summaryPath));
+        var lineCoverage = summary.RootElement.GetProperty("summary").TryGetProperty("linecoverage", out var value)
+            && value.ValueKind == JsonValueKind.Number
+                ? value.GetDouble()
+                : 0;
+
+        var threshold = Argument<double>("minCoverage", minLineCoverage);
+        if (lineCoverage < threshold)
+            throw new CakeException(
+                FormattableString.Invariant($"Line coverage {lineCoverage}% is below the minimum of {threshold}%."));
+
+        Information(FormattableString.Invariant($"Line coverage: {lineCoverage}% (minimum {threshold}%)."));
     });
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -249,11 +273,8 @@ void RunTests(IEnumerable<FilePath> projects)
 
         if (collectCoverage)
         {
-            var output = coverageDir.Combine(project.GetFilenameWithoutExtension().ToString());
-            settings.ArgumentCustomization = args => args
-                .Append("/p:CollectCoverage=true")
-                .Append("/p:CoverletOutputFormat=cobertura")
-                .Append($"/p:CoverletOutput={output}/");
+            settings.Collectors = new[] { "Code Coverage;Format=cobertura" };
+            settings.ResultsDirectory = coverageDir.Combine(project.GetFilenameWithoutExtension().ToString());
         }
 
         DotNetTest(project.FullPath, settings);
@@ -275,23 +296,24 @@ Dictionary<string, DirectoryPath> GetProjectDirectoriesByPackageId()
     var result = new Dictionary<string, DirectoryPath>(StringComparer.OrdinalIgnoreCase);
     foreach (var project in GetFiles("./src/**/*.csproj"))
     {
-        var properties = XDocument.Load(project.FullPath).Descendants();
-        string GetProperty(string name) => properties
-            .Where(x => x.Name.LocalName == name)
-            .Select(x => x.Value.Trim())
-            .FirstOrDefault(x => x.Length > 0);
-
-        if (String.Equals(GetProperty("IsPackable"), "false", StringComparison.OrdinalIgnoreCase))
+        if (String.Equals(ReadProjectProperty(project, "IsPackable"), "false", StringComparison.OrdinalIgnoreCase))
             continue;
 
-        var packageId = GetProperty("PackageId")
-            ?? GetProperty("AssemblyName")
-            ?? project.GetFilenameWithoutExtension().ToString();
+        var packageId = ReadProjectProperty(project, "PackageId") ?? ReadAssemblyName(project);
         result[packageId] = project.GetDirectory();
     }
 
     return result;
 }
+
+string ReadAssemblyName(FilePath project) =>
+    ReadProjectProperty(project, "AssemblyName") ?? project.GetFilenameWithoutExtension().ToString();
+
+string ReadProjectProperty(FilePath project, string name) => XDocument.Load(project.FullPath)
+    .Descendants()
+    .Where(x => x.Name.LocalName == name)
+    .Select(x => x.Value.Trim())
+    .FirstOrDefault(x => x.Length > 0);
 
 (string PackageId, string Version) ReadPackageIdentity(FilePath nupkg)
 {

@@ -15,12 +15,19 @@ dotnet cake --target=Build                            # clean + build
 dotnet cake --target=UnitTests                        # unit tests only
 dotnet cake --target=IntegrationTests                 # integration tests only (may need Docker)
 dotnet cake --target=Test --framework=net10.0         # all tests for one target framework
-dotnet cake --target=CoverageReport                   # coverage report in artifacts/coverage-report
+dotnet cake --target=CoverageReport                   # Default + coverage report in artifacts/coverage-report
 dotnet cake --target=Pack                             # packages in artifacts/packages
 dotnet cake --target=GitHubReleases --githubReleaseDryRun   # preview release notes after Pack
 ```
 
 For a focused loop on one test, plain `dotnet test <project> --filter "FullyQualifiedName~Name"` is fine.
+
+CI runs `CoverageReport`: the coverage summary is in the pull request run summary, the coverage badge
+(`coverage.json` in the `badges` branch) is updated on pushes to the default branch. Coverage comes from
+Microsoft Code Coverage of `Microsoft.NET.Test.Sdk`, test projects need no coverlet packages.
+The minimum line coverage is set in the repository `build.cake` (`minLineCoverage = 70;` after `#load`):
+`CoverageReport`, and so the pull request build, fails below it. Raise it when coverage grows, don't lower it
+to make a pull request pass.
 
 ## Repository layout
 
