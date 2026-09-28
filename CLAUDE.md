@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Release
 
-Single-package repository: releases are tagged `v<Version>`, notes come from the root `CHANGELOG.md`.
+Single-package repository: the version and the release notes come from the root `CHANGELOG.md`, releases are tagged `v<version>`.
 
 ## Build notes
 
