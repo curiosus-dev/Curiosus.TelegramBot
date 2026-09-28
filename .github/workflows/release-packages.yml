@@ -2,7 +2,8 @@
 #
 # Publishes packages to nuget.org via NuGet Trusted Publishing (OIDC, no long-lived API keys)
 # and creates a tag and a GitHub release for every new package version.
-# Also updates the coverage badge: coverage.json in the `badges` branch, a shields.io endpoint badge
+# Also updates coverage badges in the `badges` branch: coverage.json for the repository and <PackageId>.json
+# per package, shields.io endpoint badges:
 # https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/<owner>/<repository>/badges/coverage.json
 # nuget.org policy: owner = repository owner, repository = this repository, workflow file = release-packages.yml.
 # Required repository secret: NUGET_USER - nuget.org profile name (not an email).
@@ -93,14 +94,10 @@ jobs:
         with:
           name: coverage-report
           path: ${{ runner.temp }}/coverage-report/
-      - name: Update coverage badge
+      - name: Update coverage badges
         env:
-          SUMMARY: ${{ runner.temp }}/coverage-report/Summary.json
+          BADGES: ${{ runner.temp }}/coverage-report/badges
         run: |
-          coverage=$(jq -r '.summary.linecoverage' "$SUMMARY")
-          color=$(jq -rn --argjson c "$coverage" \
-            'if $c >= 80 then "brightgreen" elif $c >= 60 then "yellow" elif $c >= 40 then "orange" else "red" end')
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git fetch --depth=1 origin badges; then
@@ -109,12 +106,14 @@ jobs:
             git switch --orphan badges
           fi
 
-          jq -n --arg message "$coverage%" --arg color "$color" \
-            '{schemaVersion: 1, label: "coverage", message: $message, color: $color}' > coverage.json
-          git add coverage.json
+          # Badges of removed packages go away too.
+          git rm -q --ignore-unmatch -- '*.json'
+          cp "$BADGES"/*.json .
+          git add -- '*.json'
+          coverage=$(jq -r .message coverage.json)
           if git diff --cached --quiet; then
-            echo "Coverage is unchanged: $coverage%"
+            echo "Coverage is unchanged: $coverage"
             exit 0
           fi
-          git commit -m "Update coverage badge ($coverage%)"
+          git commit -m "Update coverage badges ($coverage)"
           git push origin badges
