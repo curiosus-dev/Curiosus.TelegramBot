@@ -1,8 +1,11 @@
-# Markeli.TelegramBot
+# Curiosus.TelegramBot
+
+> **Renamed:** formerly `Markeli.TelegramBot`. Since 2.0.0 the package is published as `Curiosus.TelegramBot`
+> by [curiosus-dev](https://www.nuget.org/profiles/curiosus-dev). To migrate, update the package reference and replace the `Markeli.TelegramBot` namespace.
 
 [![Release](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml/badge.svg?branch=main)](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml)
-[![NuGet](https://img.shields.io/nuget/v/Markeli.TelegramBot)](https://www.nuget.org/packages/Markeli.TelegramBot)
-[![NuGet Downloads](https://img.shields.io/nuget/dt/Markeli.TelegramBot)](https://www.nuget.org/packages/Markeli.TelegramBot)
+[![NuGet](https://img.shields.io/nuget/v/Curiosus.TelegramBot)](https://www.nuget.org/packages/Curiosus.TelegramBot)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Curiosus.TelegramBot)](https://www.nuget.org/packages/Curiosus.TelegramBot)
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/curiosus-dev/Curiosus.TelegramBot/badges/coverage.json)](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/coverage.yml)
 
 Infrastructure library for building Telegram bots on .NET: command dispatching, multi-step state management, update queue with persistence, and simple chat authentication.
@@ -48,7 +51,7 @@ Updates are polled, enqueued into a thread-safe `BlockingCollection<Update>`, an
 ## Installation
 
 ```bash
-dotnet add package Markeli.TelegramBot
+dotnet add package Curiosus.TelegramBot
 ```
 
 ## Quick start

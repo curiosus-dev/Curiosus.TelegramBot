@@ -269,7 +269,7 @@ FilePathCollection GetPackages()
     return packages;
 }
 
-// PackageId may differ from the project name (e.g. Curiosity.Configuration.YAML -> Curiosity.Configuration.YML).
+// PackageId may differ from the project name (e.g. Curiosus.Configuration.YAML -> Curiosus.Configuration.YML).
 Dictionary<string, DirectoryPath> GetProjectDirectoriesByPackageId()
 {
     var result = new Dictionary<string, DirectoryPath>(StringComparer.OrdinalIgnoreCase);

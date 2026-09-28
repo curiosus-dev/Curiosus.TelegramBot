@@ -1,9 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [2.0.0] - 2026-09-28
 
 ### Changed
 
+- **Breaking:** package renamed from `Markeli.TelegramBot` to `Curiosus.TelegramBot` and now published by the [curiosus-dev](https://www.nuget.org/profiles/curiosus-dev) organization. Namespaces, assemblies and types were renamed accordingly (`Markeli.TelegramBot` → `Curiosus.TelegramBot`): replace the namespace in your code to migrate.
 - Build, CI and release setup is shared with the other Curiosus libraries and synced from [curiosus-dev/dotnet-tools](https://github.com/curiosus-dev/dotnet-tools): `build/curiosus.cake`, `build/Curiosus.props`, `.editorconfig`, `nuget.config`, `build.yml` and `release-packages.yml`.
 - Publishing moved from the `v*` tag workflow (`release.yml`, long-lived `NUGET_API_KEY` secret) to `release-packages.yml`: every push to `main` publishes a new `<Version>` via NuGet Trusted Publishing (OIDC) and creates the `v<Version>` tag and GitHub release automatically.
 - `ci.yml` replaced by the shared `build.yml` (all target frameworks in one run) and `coverage.yml`; the Cake `Coverage-Report` target is now `CoverageReport` and always collects coverage.
