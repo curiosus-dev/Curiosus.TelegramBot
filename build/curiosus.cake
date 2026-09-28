@@ -26,6 +26,9 @@
 //                      API key is taken from NUGET_API_KEY (short-lived key from NuGet Trusted Publishing on CI)
 //   GitHubReleases   - creates a tag and a GitHub release for every package version without one
 //   Publish          - NuGetPush + GitHubReleases
+//   ReleaseCheck     - lists packages changed since --since and whether the merge releases them (their version
+//                      is not on nuget.org yet); warns about changed ones that won't be released, never fails.
+//                      Writes ./artifacts/release-check.md
 //
 // Arguments:
 //   --target=Default
@@ -37,9 +40,13 @@
 //                             in build.cake after #load: `minLineCoverage = 70;` (0 - no check)
 //   --releaseTagFormat=auto   auto: "v{version}" for single-package repositories, "{id}.v{version}" otherwise
 //   --githubReleaseDryRun     writes release notes to ./artifacts/release-notes without creating releases
+//   --since=origin/HEAD       ReleaseCheck compares HEAD with this commit (HEAD^1 for a pull request merge commit)
+//
+// Package versions come from CHANGELOG.md, see build/Curiosus.props.
 ///////////////////////////////////////////////////////////////////////////////
 
 using System.IO.Compression;
+using System.Net.Http;
 using System.Text.Json;
 using System.Xml.Linq;
 
@@ -49,6 +56,7 @@ var framework = Argument<string>("framework", "");
 var collectCoverage = Argument<bool>("coverage", false) || target == "CoverageReport";
 var releaseTagFormat = Argument<string>("releaseTagFormat", "auto");
 var githubReleaseDryRun = HasArgument("githubReleaseDryRun");
+var releaseCheckSince = Argument<string>("since", "origin/HEAD");
 
 // Set by the repository build.cake, read when CoverageReport runs, so --minCoverage still overrides it.
 var minLineCoverage = 0d;
@@ -238,6 +246,50 @@ Task("Publish")
     .IsDependentOn("NuGetPush")
     .IsDependentOn("GitHubReleases");
 
+// A reminder, not a gate: a pull request may change a package without releasing it (docs, refactoring).
+Task("ReleaseCheck")
+    .Does(() =>
+    {
+        var rows = new List<string>();
+        using var http = new HttpClient();
+        foreach (var (project, packageId) in GetPackableProjects())
+        {
+            var projectDir = MakeAbsolute(Directory(".")).GetRelativePath(project.GetDirectory()).FullPath;
+            if (!Git("diff", "--name-only", $"{releaseCheckSince}...HEAD", "--", projectDir).Any())
+                continue;
+
+            var properties = ReadEvaluatedProperties(project, "PackageVersion", "CuriosusChangelog");
+            var version = properties["PackageVersion"];
+            var changelog = String.IsNullOrEmpty(properties["CuriosusChangelog"])
+                ? projectDir
+                : MakeAbsolute(Directory(".")).GetRelativePath(File(properties["CuriosusChangelog"])).FullPath;
+
+            var published = IsPublishedOnNuGet(http, packageId, version);
+            if (published == false)
+            {
+                rows.Add($"| {packageId} | {version} | released on merge |");
+                continue;
+            }
+
+            var message = published == true
+                ? $"{packageId} has changes, but {version} is already on nuget.org, so the merge won't release them. "
+                    + "Add a '## [x.y.z]' section to the changelog to release, or ignore if no release is needed."
+                : $"{packageId} has changes; could not check whether {version} is on nuget.org.";
+            var status = published == true ? "already on nuget.org, not released" : "not checked";
+            rows.Add($"| {packageId} | {version} | ⚠️ {status} |");
+            Warning(message);
+            if (EnvironmentVariable("GITHUB_ACTIONS") == "true")
+                Information($"::warning file={changelog},title=Package not released::{message}");
+        }
+
+        var report = rows.Count == 0
+            ? "### Release check\n\nNo package changes.\n"
+            : "### Release check\n\n| Package | Version | On merge |\n| --- | --- | --- |\n" + String.Join("\n", rows) + "\n";
+        EnsureDirectoryExists(artifactsDir);
+        System.IO.File.WriteAllText(artifactsDir.CombineWithFilePath("release-check.md").FullPath, report);
+        Information(report);
+    });
+
 ///////////////////////////////////////////////////////////////////////////////
 // HELPERS
 ///////////////////////////////////////////////////////////////////////////////
@@ -352,6 +404,62 @@ void WriteCoverageBadge(FilePath path, double? coverage)
 
     string Get(string name) => metadata.Elements().First(x => x.Name.LocalName == name).Value.Trim();
     return (Get("id"), Get("version"));
+}
+
+IEnumerable<string> Git(params string[] arguments)
+{
+    var builder = new ProcessArgumentBuilder();
+    foreach (var argument in arguments)
+        builder.AppendQuoted(argument);
+
+    var settings = new ProcessSettings { Arguments = builder, RedirectStandardOutput = true };
+    var exitCode = StartProcess("git", settings, out var output);
+    if (exitCode != 0)
+        throw new CakeException($"git {String.Join(" ", arguments)} failed (exit code {exitCode}).");
+
+    return output.Where(x => x.Length > 0).ToList();
+}
+
+Dictionary<string, string> ReadEvaluatedProperties(FilePath project, params string[] names)
+{
+    var arguments = new ProcessArgumentBuilder().Append("msbuild").AppendQuoted(project.FullPath);
+    foreach (var name in names)
+        arguments.Append($"-getProperty:{name}");
+
+    var settings = new ProcessSettings { Arguments = arguments, RedirectStandardOutput = true };
+    var exitCode = StartProcess("dotnet", settings, out var output);
+    if (exitCode != 0)
+        throw new CakeException($"Failed to evaluate \"{project.GetFilename()}\" (exit code {exitCode}).");
+
+    // A single property is printed as is, several as {"Properties": {...}}.
+    var text = String.Join("\n", output).Trim();
+    if (names.Length == 1)
+        return new Dictionary<string, string> { [names[0]] = text };
+
+    using var json = JsonDocument.Parse(text);
+    return names.ToDictionary(x => x, x => json.RootElement.GetProperty("Properties").GetProperty(x).GetString() ?? "");
+}
+
+// null when nuget.org can't be reached.
+bool? IsPublishedOnNuGet(HttpClient http, string packageId, string version)
+{
+    try
+    {
+        var url = $"https://api.nuget.org/v3-flatcontainer/{packageId.ToLowerInvariant()}/index.json";
+        using var response = http.GetAsync(url).GetAwaiter().GetResult();
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return false;
+
+        response.EnsureSuccessStatusCode();
+        using var json = JsonDocument.Parse(response.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+        return json.RootElement.GetProperty("versions").EnumerateArray()
+            .Any(x => String.Equals(x.GetString(), version, StringComparison.OrdinalIgnoreCase));
+    }
+    catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+    {
+        Warning($"Failed to check {packageId} on nuget.org: {exception.Message}");
+        return null;
+    }
 }
 
 bool GitHubReleaseExists(string tag)

@@ -66,13 +66,19 @@ Packages follow [Semantic Versioning](https://semver.org): major for incompatibl
 consumers rely on, dropped target frameworks, stored identifiers such as cookie or message type names), minor for
 backward-compatible features, patch for backward-compatible fixes. Pre-releases are `x.y.z-alpha.N`/`-beta.N`/`-rc.N`.
 
+The CHANGELOG is the only place for a version: `build/Curiosus.props` sets `Version` of a project from the first
+`## [x.y.z]` section of its CHANGELOG (`## [Unreleased]` is skipped), so project files have no `<Version>` or
+`<PackageVersion>`, and packing fails without a CHANGELOG version.
+
 `.github/workflows/release-packages.yml` runs on every push to the default branch: build, tests, pack, push to nuget.org
 via NuGet Trusted Publishing (no API keys), then a tag and a GitHub release for every package version that has none.
-Versions already on nuget.org are skipped, so to release a package:
+Versions already on nuget.org are skipped, so to release a package add a `## [x.y.z] - yyyy-mm-dd` section on top of
+its CHANGELOG in the pull request — the section becomes the release notes. Breaking changes get a **Breaking** note with
+the migration steps. Changes not to be released yet go to `## [Unreleased]`.
 
-1. Bump its version in the csproj (`<PackageVersion>` or `<Version>`).
-2. Add the matching `## [x.y.z]` section to its CHANGELOG — the section becomes the release notes.
-   Breaking changes get a **Breaking** note with the migration steps.
+The pull request build lists the packages the merge releases (`ReleaseCheck`, in the run summary) and warns about
+changed packages whose version is already published. The warning doesn't block the merge: changes that need no release
+(docs, refactoring) can go without one. Locally: `dotnet cake --target=ReleaseCheck --since=origin/master`.
 
 Tags are `v<version>` in single-package repositories and `<PackageId>.v<version>` otherwise.
 

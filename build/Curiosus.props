@@ -31,6 +31,36 @@
         <None Include="$(MSBuildThisFileDirectory)curiosus-icon.png" Pack="true" PackagePath="/" Visible="false" />
     </ItemGroup>
 
+    <!--
+        The version is the first released section ("## [x.y.z] - yyyy-mm-dd", [Unreleased] is skipped) of CHANGELOG.md
+        next to the project, or of the repository CHANGELOG.md. Each project reads its own changelog, so versions of
+        ProjectReference dependencies are right too, which a global /p:Version would break. A <Version> in the project
+        file still wins.
+    -->
+    <PropertyGroup>
+        <_CuriosusProjectChangelog>$(MSBuildProjectDirectory)/CHANGELOG.md</_CuriosusProjectChangelog>
+        <_CuriosusRootChangelog
+            >$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)..', 'CHANGELOG.md'))</_CuriosusRootChangelog>
+        <CuriosusChangelog Condition="Exists('$(_CuriosusProjectChangelog)')">$(_CuriosusProjectChangelog)</CuriosusChangelog>
+        <CuriosusChangelog Condition="'$(CuriosusChangelog)' == '' and Exists('$(_CuriosusRootChangelog)')"
+            >$(_CuriosusRootChangelog)</CuriosusChangelog>
+        <_CuriosusChangelogBody Condition="'$(CuriosusChangelog)' != ''"
+            >$([System.IO.File]::ReadAllText('$(CuriosusChangelog)'))</_CuriosusChangelogBody>
+        <_CuriosusVersionRegex>(?m)^## \[\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?\]</_CuriosusVersionRegex>
+        <!-- Match converts to its value: "## [x.y.z]", or an empty string. -->
+        <_CuriosusVersionHeading Condition="'$(_CuriosusChangelogBody)' != ''"
+            >$([System.Text.RegularExpressions.Regex]::Match($(_CuriosusChangelogBody), $(_CuriosusVersionRegex)))
+        </_CuriosusVersionHeading>
+        <CuriosusChangelogVersion Condition="'$(_CuriosusVersionHeading.Trim())' != ''"
+            >$(_CuriosusVersionHeading.Trim().Substring(4).Replace(']', ''))</CuriosusChangelogVersion>
+        <Version Condition="'$(CuriosusChangelogVersion)' != ''">$(CuriosusChangelogVersion)</Version>
+    </PropertyGroup>
+
+    <Target Name="CuriosusCheckPackageVersion" BeforeTargets="GenerateNuspec" Condition="'$(IsPackable)' != 'false'">
+        <Error Condition="'$(CuriosusChangelogVersion)' == ''"
+               Text="No '## [x.y.z]' section in CHANGELOG.md of the project or of the repository: it sets the version." />
+    </Target>
+
     <!-- A README.md next to the project is the package readme on nuget.org. -->
     <PropertyGroup Condition="Exists('$(MSBuildProjectDirectory)/README.md')">
         <PackageReadmeFile>README.md</PackageReadmeFile>

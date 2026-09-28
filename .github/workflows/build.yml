@@ -2,6 +2,7 @@
 # Runs the same Cake pipeline as a local `dotnet cake --target=CoverageReport`: build, tests and a coverage report
 # in the run summary. Pushes to the default branch are covered by release-packages.yml, which runs the same
 # build and tests before publishing and updates the coverage badge.
+# Release check lists the packages the merge releases and warns about changed packages it won't release; it never fails.
 
 name: Build and test
 
@@ -22,6 +23,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2 # the merge commit and its parents: HEAD^1 is the base branch
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: |
@@ -34,6 +37,12 @@ jobs:
         run: dotnet cake --target=CoverageReport
       - name: Coverage summary
         run: cat artifacts/coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Release check
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        run: |
+          dotnet cake --target=ReleaseCheck --since=HEAD^1
+          cat artifacts/release-check.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-report
