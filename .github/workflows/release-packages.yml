@@ -5,14 +5,16 @@
 # Also updates coverage badges in the `badges` branch: coverage.json for the repository and <PackageId>.json
 # per package, shields.io endpoint badges:
 # https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/<owner>/<repository>/badges/coverage.json
-# nuget.org policy: owner = repository owner, repository = this repository, workflow file = release-packages.yml.
+# nuget.org policy: owner = repository owner, repository = this repository, workflow file = release-packages.yml,
+# environment = nuget. The nuget environment (dotnet-tools/settings/environments.json) deploys from main only: a workflow
+# file can be changed in any branch, the environment branch policy can't, so only main gets a token nuget.org accepts.
 # Required repository secret: NUGET_USER - nuget.org profile name (not an email).
 
 name: Release packages
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   workflow_dispatch:
 
 concurrency:
@@ -24,6 +26,8 @@ permissions:
 
 jobs:
   build:
+    # workflow_dispatch can be started on any branch.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
@@ -53,6 +57,7 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    environment: nuget
     permissions:
       contents: write # tags and GitHub releases
       id-token: write # OIDC token for NuGet Trusted Publishing
@@ -83,7 +88,6 @@ jobs:
   # Separate from publish, so a failed badge update never blocks a release.
   coverage-badge:
     needs: build
-    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     permissions:
       contents: write # commits to the badges branch

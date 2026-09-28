@@ -61,6 +61,26 @@
                Text="No '## [x.y.z]' section in CHANGELOG.md of the project or of the repository: it sets the version." />
     </Target>
 
+    <!--
+        Release notes link to the CHANGELOG at the commit the package is built from: it doesn't depend on the branch name,
+        and shows the notes as they were at release. Source Link provides the repository URL and the commit.
+    -->
+    <Target Name="CuriosusReleaseNotes" BeforeTargets="GenerateNuspec" DependsOnTargets="InitializeSourceControlInformation"
+            Condition="'$(PackageReleaseNotes)' == '' and '$(CuriosusChangelog)' != ''">
+        <PropertyGroup>
+            <_CuriosusGitSuffix>(\.git)?/?$</_CuriosusGitSuffix>
+            <_CuriosusRepositoryUrl
+                >$([System.Text.RegularExpressions.Regex]::Replace($(PrivateRepositoryUrl), $(_CuriosusGitSuffix), ''))
+            </_CuriosusRepositoryUrl>
+            <_CuriosusRepositoryUrl>$(_CuriosusRepositoryUrl.Trim())</_CuriosusRepositoryUrl>
+            <_CuriosusChangelogPath
+                >$([MSBuild]::MakeRelative($(MSBuildThisFileDirectory)../, $(CuriosusChangelog)))</_CuriosusChangelogPath>
+            <_CuriosusChangelogPath>$(_CuriosusChangelogPath.Replace('\', '/'))</_CuriosusChangelogPath>
+            <PackageReleaseNotes Condition="'$(_CuriosusRepositoryUrl)' != '' and '$(SourceRevisionId)' != ''"
+                >$(_CuriosusRepositoryUrl)/blob/$(SourceRevisionId)/$(_CuriosusChangelogPath)</PackageReleaseNotes>
+        </PropertyGroup>
+    </Target>
+
     <!-- A README.md next to the project is the package readme on nuget.org. -->
     <PropertyGroup Condition="Exists('$(MSBuildProjectDirectory)/README.md')">
         <PackageReadmeFile>README.md</PackageReadmeFile>
