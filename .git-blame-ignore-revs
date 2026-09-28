@@ -1,0 +1,5 @@
+# Whitespace-only commits, ignored by `git blame` on GitHub.
+# Locally: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Switch indentation from tabs to 4 spaces
+9e3893de7cedfa390269e35261209fc08706173a
