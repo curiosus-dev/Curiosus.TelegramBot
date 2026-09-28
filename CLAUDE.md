@@ -26,9 +26,20 @@ dotnet cake --target=Test --coverage=true --framework=net10.0
 # Generate HTML coverage report (requires --coverage=true)
 dotnet cake --target=Coverage-Report --framework=net10.0 --coverage=true
 
-# Create NuGet package
+# Create NuGet package (artifacts/packages)
 dotnet cake --target=Pack
+
+# Preview GitHub release notes for the packed version (artifacts/release-notes)
+dotnet cake --target=GitHubReleases --exclusive --githubReleaseDryRun
 ```
+
+## Release
+
+`.github/workflows/nuget-publish.yml` runs on every push to `main`: tests, packs, publishes to nuget.org via NuGet Trusted
+Publishing (OIDC, `NuGet/login`, environment `nuget`, secret `NUGET_USER`) and creates a `v<Version>` tag and GitHub release
+with notes from the matching `## [x.y.z]` section of `CHANGELOG.md`. An already published version is skipped. To release:
+bump `<Version>` in the csproj and add the CHANGELOG section. Publishing logic lives in `build/publish.cake`, shared verbatim
+with the other Curiosus repositories — do not change it here only.
 
 `DotNetClean` (the Cake `Clean` target) does not remove stale per-framework output. After changing a
 package version in `Directory.Packages.props`, wipe `bin`/`obj` before trusting a test run — leftover

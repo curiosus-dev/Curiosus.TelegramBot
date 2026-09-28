@@ -1,3 +1,5 @@
+#load "build/publish.cake"
+
 ///////////////////////////////////////////////////////////////////////////////
 // ARGUMENTS
 ///////////////////////////////////////////////////////////////////////////////
@@ -9,7 +11,6 @@ var collectCoverage = Argument<bool>("coverage", false);
 
 var artifactsDir = Directory("./artifacts");
 var solutionPath = "./Markeli.TelegramBot.sln";
-var projectPath = "./src/Markeli.TelegramBot/Markeli.TelegramBot.csproj";
 
 ///////////////////////////////////////////////////////////////////////////////
 // TASKS
@@ -83,37 +84,7 @@ Task("Coverage-Report")
 		});
 	});
 
-Task("Pack")
-	.IsDependentOn("Build")
-	.Does(() =>
-	{
-		var settings = new DotNetPackSettings
-		{
-			Configuration = configuration,
-			OutputDirectory = artifactsDir,
-			NoBuild = true
-		};
-
-		DotNetPack(projectPath, settings);
-	});
-
-Task("Push")
-	.IsDependentOn("Pack")
-	.Does(() =>
-	{
-		var apiKey = EnvironmentVariable("NUGET_API_KEY");
-		if (String.IsNullOrWhiteSpace(apiKey))
-			throw new Exception("NUGET_API_KEY environment variable is not set");
-
-		var packages = GetFiles($"{artifactsDir}/*.nupkg");
-		foreach (var package in packages)
-		{
-			DotNetNuGetPush(package.FullPath, new DotNetNuGetPushSettings
-			{
-				Source = "https://api.nuget.org/v3/index.json",
-				ApiKey = apiKey
-			});
-		}
-	});
+Task("Default")
+	.IsDependentOn("Test");
 
 RunTarget(target);

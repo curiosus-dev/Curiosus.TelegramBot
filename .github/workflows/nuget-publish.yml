@@ -1,0 +1,75 @@
+# Shared between Curiosus repositories, keep the file identical everywhere.
+#
+# Publishes packages to nuget.org via NuGet Trusted Publishing (OIDC, no long-lived API keys).
+# nuget.org policy: owner = repository owner, repository = this repository,
+# workflow file = nuget-publish.yml, environment = nuget.
+# Required repository secret: NUGET_USER - nuget.org profile name (not an email).
+
+name: Publish NuGet packages
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: nuget-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+      - name: Restore tools
+        run: dotnet tool restore
+      - name: Build and test
+        run: dotnet cake --target=Default
+      - name: Pack
+        run: dotnet cake --target=Pack --exclusive
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts/packages/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: nuget
+    permissions:
+      contents: write # tags and GitHub releases
+      id-token: write # OIDC token for NuGet Trusted Publishing
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore tools
+        run: dotnet tool restore
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: artifacts/packages/
+      # The temporary API key lives 1 hour, so it is requested right before the push.
+      - name: NuGet login
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+      - name: Publish packages and create GitHub releases
+        run: dotnet cake --target=Publish
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
