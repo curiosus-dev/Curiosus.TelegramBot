@@ -6,7 +6,7 @@
 [![Release](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml/badge.svg?branch=main)](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml)
 [![NuGet](https://img.shields.io/nuget/v/Curiosus.TelegramBot)](https://www.nuget.org/packages/Curiosus.TelegramBot)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/Curiosus.TelegramBot)](https://www.nuget.org/packages/Curiosus.TelegramBot)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/curiosus-dev/Curiosus.TelegramBot/badges/coverage.json)](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/coverage.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/curiosus-dev/Curiosus.TelegramBot/badges/coverage.json)](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml)
 
 Infrastructure library for building Telegram bots on .NET: command dispatching, multi-step state management, update queue with persistence, and simple chat authentication.
 
