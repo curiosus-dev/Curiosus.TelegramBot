@@ -2,7 +2,8 @@
 # Runs the same Cake pipeline as a local `dotnet cake --target=CoverageReport`: build, tests and a coverage report
 # in the run summary. Pushes to the default branch are covered by release-packages.yml, which runs the same
 # build and tests before publishing and updates the coverage badge.
-# Release check lists the packages the merge releases and warns about changed packages it won't release; it never fails.
+# The release-check job comments on the pull request which changed packages the merge releases and which have
+# no changelog entry; it never fails. Pull requests from forks get it in the run summary only (read-only token).
 
 name: Build and test
 
@@ -23,8 +24,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 2 # the merge commit and its parents: HEAD^1 is the base branch
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: |
@@ -37,13 +36,49 @@ jobs:
         run: dotnet cake --target=CoverageReport
       - name: Coverage summary
         run: cat artifacts/coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
-      - name: Release check
-        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
-        continue-on-error: true
-        run: |
-          dotnet cake --target=ReleaseCheck --since=HEAD^1
-          cat artifacts/release-check.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-report
           path: artifacts/coverage-report/
+
+  release-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2 # the merge commit and its parents: HEAD^1 is the base branch
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore tools
+        run: dotnet tool restore
+      - name: Release check
+        id: check
+        continue-on-error: true
+        run: |
+          dotnet cake --target=ReleaseCheck --since=HEAD^1
+          cat artifacts/release-check.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Comment on the pull request
+        if: steps.check.outcome == 'success' && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHANGED: ${{ steps.check.outputs.changed }}
+        run: |
+          body=artifacts/release-check.md
+          printf '\n<sub>For %s.</sub>\n' "$HEAD_SHA" >> "$body"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- release-check -->"))) | .id' \
+            | head -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F "body=@$body" --silent
+          elif [ "$CHANGED" = "true" ]; then
+            gh pr comment "$PR_NUMBER" --body-file "$body"
+          fi
