@@ -1,9 +1,9 @@
 # Markeli.TelegramBot
 
-[![CI](https://github.com/Markeli/Markeli.TelegramBot/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Markeli/Markeli.TelegramBot/actions/workflows/ci.yml)
+[![Release](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml/badge.svg?branch=main)](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml)
 [![NuGet](https://img.shields.io/nuget/v/Markeli.TelegramBot)](https://www.nuget.org/packages/Markeli.TelegramBot)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/Markeli.TelegramBot)](https://www.nuget.org/packages/Markeli.TelegramBot)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Markeli/Markeli.TelegramBot/badges/coverage.json)](https://github.com/Markeli/Markeli.TelegramBot/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/curiosus-dev/Curiosus.TelegramBot/badges/coverage.json)](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/coverage.yml)
 
 Infrastructure library for building Telegram bots on .NET: command dispatching, multi-step state management, update queue with persistence, and simple chat authentication.
 
@@ -227,18 +227,19 @@ dotnet build
 dotnet test
 ```
 
-The project uses [Cake](https://cakebuild.net/) for build automation. Available targets:
+The project uses [Cake](https://cakebuild.net/) for build automation, the same pipeline runs locally and on CI:
 
 ```bash
-dotnet cake --target=Build            # Clean + build
-dotnet cake --target=Test             # Build + run tests with coverage
-dotnet cake --target=Coverage-Report  # Test + generate HTML coverage report
-dotnet cake --target=Pack             # Build + create NuGet package
+dotnet tool restore                   # once: Cake and ReportGenerator
+dotnet cake                           # Clean + build + tests
+dotnet cake --target=CoverageReport   # Tests with coverage + HTML report in ./artifacts/coverage-report/
+dotnet cake --target=Pack             # NuGet package in ./artifacts/packages/
 ```
 
-Coverage reports are generated in `./artifacts/coverage-report/`.
+Build scripts and settings are shared with the other Curiosus libraries via
+[curiosus-dev/dotnet-tools](https://github.com/curiosus-dev/dotnet-tools).
 
-Packages are restored exclusively from nuget.org: the repository-level `NuGet.config` clears any inherited
+Packages are restored exclusively from nuget.org: the repository-level `nuget.config` clears any inherited
 source and maps every package pattern to nuget.org, so restore behaves identically on any machine.
 
 ## License

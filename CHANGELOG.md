@@ -4,7 +4,14 @@
 
 ### Changed
 
+- Build, CI and release setup is shared with the other Curiosus libraries and synced from [curiosus-dev/dotnet-tools](https://github.com/curiosus-dev/dotnet-tools): `build/curiosus.cake`, `build/Curiosus.props`, `.editorconfig`, `nuget.config`, `build.yml` and `release-packages.yml`.
 - Publishing moved from the `v*` tag workflow (`release.yml`, long-lived `NUGET_API_KEY` secret) to `release-packages.yml`: every push to `main` publishes a new `<Version>` via NuGet Trusted Publishing (OIDC) and creates the `v<Version>` tag and GitHub release automatically.
+- `ci.yml` replaced by the shared `build.yml` (all target frameworks in one run) and `coverage.yml`; the Cake `Coverage-Report` target is now `CoverageReport` and always collects coverage.
+- Indentation switched from tabs to 4 spaces, as in the other Curiosus libraries.
+
+### Removed
+
+- Explicit `Microsoft.SourceLink.GitHub` package reference: Source Link is part of the .NET 8+ SDK. This also removes the `NU1902` warning for the transitive `Microsoft.Build.Tasks.Git` 10.0.301.
 
 ## [1.0.0] - 2026-08-11
 

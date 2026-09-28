@@ -1,0 +1,33 @@
+# Synced from https://github.com/curiosus-dev/dotnet-tools, do not edit in place.
+# Runs the same Cake pipeline as a local `dotnet cake`. Pushes to the default branch are
+# covered by release-packages.yml, which runs the same build and tests before publishing.
+
+name: Build and test
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+      - name: Restore tools
+        run: dotnet tool restore
+      - name: Build and test
+        run: dotnet cake --target=Default

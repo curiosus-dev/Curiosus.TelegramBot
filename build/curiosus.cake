@@ -1,0 +1,365 @@
+///////////////////////////////////////////////////////////////////////////////
+// CURIOSUS BUILD SCRIPT
+//
+// Synced from https://github.com/curiosus-dev/dotnet-tools, do not edit in place.
+// The repository build.cake loads it, adds repository-specific tasks and calls RunTarget(target):
+//
+//     #load "build/curiosus.cake"
+//     RunTarget(target);
+//
+// Conventions: a single *.sln/*.slnx in the root, packages in ./src, tests in ./tests
+// (integration tests under tests/IntegrationTests or in *.IntegrationTests projects),
+// release notes in CHANGELOG.md of a project or of the repository.
+//
+// Tasks:
+//   Default          - Build + Test
+//   Clean            - cleans the solution and ./artifacts
+//   Build            - Clean + builds the solution
+//   Test             - UnitTests + IntegrationTests
+//   UnitTests        - runs test projects except integration ones
+//   IntegrationTests - runs integration test projects
+//   CoverageReport   - Test with coverage + HTML/text report in ./artifacts/coverage-report
+//   Pack             - packs every ./src/**/*.csproj into ./artifacts/packages
+//   NuGetPush        - pushes packages to nuget.org, already published versions are skipped;
+//                      API key is taken from NUGET_API_KEY (short-lived key from NuGet Trusted Publishing on CI)
+//   GitHubReleases   - creates a tag and a GitHub release for every package version without one
+//   Publish          - NuGetPush + GitHubReleases
+//
+// Arguments:
+//   --target=Default
+//   --configuration=Release
+//   --framework=net10.0       limits build and tests to a single target framework
+//   --coverage=true           collects coverage with coverlet.msbuild into ./artifacts/coverage
+//   --releaseTagFormat=auto   auto: "v{version}" for single-package repositories, "{id}.v{version}" otherwise
+//   --githubReleaseDryRun     writes release notes to ./artifacts/release-notes without creating releases
+///////////////////////////////////////////////////////////////////////////////
+
+using System.IO.Compression;
+using System.Xml.Linq;
+
+var target = Argument<string>("target", "Default");
+var configuration = Argument<string>("configuration", "Release");
+var framework = Argument<string>("framework", "");
+var collectCoverage = Argument<bool>("coverage", false);
+var releaseTagFormat = Argument<string>("releaseTagFormat", "auto");
+var githubReleaseDryRun = HasArgument("githubReleaseDryRun");
+
+var artifactsDir = MakeAbsolute(Directory("./artifacts"));
+var packagesDir = artifactsDir.Combine("packages");
+var coverageDir = artifactsDir.Combine("coverage");
+var nugetSource = "https://api.nuget.org/v3/index.json";
+var solutionPath = FindSolution();
+
+///////////////////////////////////////////////////////////////////////////////
+// BUILD & TEST
+///////////////////////////////////////////////////////////////////////////////
+
+Task("Clean")
+    .Does(() =>
+    {
+        DotNetClean(solutionPath.FullPath, new DotNetCleanSettings { Configuration = configuration });
+        CleanDirectory(artifactsDir);
+    });
+
+Task("Build")
+    .IsDependentOn("Clean")
+    .Does(() =>
+    {
+        var settings = new DotNetBuildSettings { Configuration = configuration };
+        if (!String.IsNullOrEmpty(framework))
+            settings.Framework = framework;
+
+        DotNetBuild(solutionPath.FullPath, settings);
+    });
+
+Task("UnitTests")
+    .Does(() => RunTests(GetTestProjects().Where(x => !IsIntegrationTestProject(x))));
+
+Task("IntegrationTests")
+    .Does(() => RunTests(GetTestProjects().Where(IsIntegrationTestProject)));
+
+Task("Test")
+    .IsDependentOn("UnitTests")
+    .IsDependentOn("IntegrationTests");
+
+Task("Default")
+    .IsDependentOn("Build")
+    .IsDependentOn("Test");
+
+Task("CoverageReport")
+    .Does(() =>
+    {
+        collectCoverage = true;
+        CleanDirectory(coverageDir);
+        RunTests(GetTestProjects());
+
+        var reports = GetFiles($"{coverageDir}/**/*.cobertura.xml");
+        if (reports.Count == 0)
+            throw new CakeException($"No coverage reports found in {coverageDir}. Do test projects reference coverlet.msbuild?");
+
+        var exitCode = StartProcess("dotnet", new ProcessSettings
+        {
+            Arguments = new ProcessArgumentBuilder()
+                .Append("tool").Append("run").Append("reportgenerator")
+                .Append($"-reports:{String.Join(";", reports.Select(x => x.FullPath))}")
+                .Append($"-targetdir:{artifactsDir.Combine("coverage-report")}")
+                .Append("-reporttypes:Html;TextSummary")
+        });
+        if (exitCode != 0)
+            throw new CakeException($"reportgenerator failed (exit code {exitCode}).");
+    });
+
+///////////////////////////////////////////////////////////////////////////////
+// PACK & PUBLISH
+///////////////////////////////////////////////////////////////////////////////
+
+Task("Pack")
+    .Does(() =>
+    {
+        CleanDirectory(packagesDir);
+
+        foreach (var project in GetFiles("./src/**/*.csproj"))
+        {
+            Information($"Packing \"{project.GetFilename()}\"...");
+            DotNetPack(project.FullPath, new DotNetPackSettings
+            {
+                Configuration = configuration,
+                OutputDirectory = packagesDir
+            });
+        }
+    });
+
+Task("NuGetPush")
+    .Does(() =>
+    {
+        var apiKey = EnvironmentVariable("NUGET_API_KEY");
+        if (String.IsNullOrWhiteSpace(apiKey))
+            throw new CakeException("NUGET_API_KEY environment variable is not set.");
+
+        foreach (var package in GetPackages())
+        {
+            Information($"Publishing \"{package.GetFilename()}\"...");
+
+            // Symbol packages (.snupkg) next to the .nupkg are pushed automatically.
+            DotNetNuGetPush(package.FullPath, new DotNetNuGetPushSettings
+            {
+                Source = nugetSource,
+                ApiKey = apiKey,
+                SkipDuplicate = true
+            });
+        }
+    });
+
+Task("GitHubReleases")
+    .Does(() =>
+    {
+        var repository = EnvironmentVariable("GITHUB_REPOSITORY");
+        var commitSha = EnvironmentVariable("GITHUB_SHA");
+        if (!githubReleaseDryRun && (String.IsNullOrEmpty(repository) || String.IsNullOrEmpty(commitSha)))
+            throw new CakeException("GITHUB_REPOSITORY or GITHUB_SHA is not set. Pass --githubReleaseDryRun to run locally.");
+
+        var releaseNotesDir = artifactsDir.Combine("release-notes");
+        EnsureDirectoryExists(releaseNotesDir);
+
+        var projectDirs = GetProjectDirectoriesByPackageId();
+        var isSinglePackageRepository = projectDirs.Count == 1;
+        var tagFormat = releaseTagFormat == "auto"
+            ? isSinglePackageRepository ? "v{version}" : "{id}.v{version}"
+            : releaseTagFormat;
+
+        foreach (var package in GetPackages())
+        {
+            var (packageId, version) = ReadPackageIdentity(package);
+            var tag = tagFormat.Replace("{id}", packageId).Replace("{version}", version);
+
+            if (!githubReleaseDryRun && GitHubReleaseExists(tag))
+            {
+                Verbose($"Release \"{tag}\" already exists.");
+                continue;
+            }
+
+            if (!projectDirs.TryGetValue(packageId, out var projectDir))
+                throw new CakeException($"Project for package \"{packageId}\" is not found in ./src.");
+
+            var notesFile = releaseNotesDir.CombineWithFilePath($"{tag}.md");
+            System.IO.File.WriteAllText(notesFile.FullPath, BuildReleaseNotes(projectDir, packageId, version, repository, tag));
+
+            if (githubReleaseDryRun)
+            {
+                Information($"[dry run] Release \"{tag}\", notes: {notesFile}");
+                continue;
+            }
+
+            Information($"Creating release \"{tag}\"...");
+            var arguments = new ProcessArgumentBuilder()
+                .Append("release").Append("create").AppendQuoted(tag)
+                .Append("--target").Append(commitSha)
+                .Append("--title").AppendQuoted($"{packageId} v{version}")
+                .Append("--notes-file").AppendQuoted(notesFile.FullPath);
+            if (!isSinglePackageRepository)
+                arguments.Append("--latest=false");
+            if (version.Contains('-'))
+                arguments.Append("--prerelease");
+
+            var exitCode = StartProcess("gh", new ProcessSettings { Arguments = arguments });
+            if (exitCode != 0)
+                throw new CakeException($"Failed to create release \"{tag}\" (exit code {exitCode}).");
+        }
+    });
+
+Task("Publish")
+    .IsDependentOn("NuGetPush")
+    .IsDependentOn("GitHubReleases");
+
+///////////////////////////////////////////////////////////////////////////////
+// HELPERS
+///////////////////////////////////////////////////////////////////////////////
+
+FilePath FindSolution()
+{
+    var solutions = GetFiles("./*.sln").Concat(GetFiles("./*.slnx")).ToList();
+    if (solutions.Count != 1)
+        throw new CakeException($"Expected a single *.sln or *.slnx in the repository root, found {solutions.Count}.");
+
+    return solutions[0];
+}
+
+List<FilePath> GetTestProjects() => GetFiles("./tests/**/*.csproj").OrderBy(x => x.FullPath).ToList();
+
+bool IsIntegrationTestProject(FilePath project) =>
+    project.FullPath.Contains("/IntegrationTests/")
+    || project.GetFilenameWithoutExtension().ToString().EndsWith("IntegrationTests", StringComparison.OrdinalIgnoreCase);
+
+void RunTests(IEnumerable<FilePath> projects)
+{
+    var list = projects.ToList();
+    if (list.Count == 0)
+    {
+        Information("No test projects found.");
+        return;
+    }
+
+    foreach (var project in list)
+    {
+        Information($"Testing \"{project.GetFilename()}\"...");
+
+        var settings = new DotNetTestSettings { Configuration = configuration };
+        if (!String.IsNullOrEmpty(framework))
+            settings.Framework = framework;
+
+        if (collectCoverage)
+        {
+            var output = coverageDir.Combine(project.GetFilenameWithoutExtension().ToString());
+            settings.ArgumentCustomization = args => args
+                .Append("/p:CollectCoverage=true")
+                .Append("/p:CoverletOutputFormat=cobertura")
+                .Append($"/p:CoverletOutput={output}/");
+        }
+
+        DotNetTest(project.FullPath, settings);
+    }
+}
+
+FilePathCollection GetPackages()
+{
+    var packages = GetFiles($"{packagesDir}/*.nupkg");
+    if (packages.Count == 0)
+        throw new CakeException($"No packages found in {packagesDir}. Run the Pack task first.");
+
+    return packages;
+}
+
+// PackageId may differ from the project name (e.g. Curiosity.Configuration.YAML -> Curiosity.Configuration.YML).
+Dictionary<string, DirectoryPath> GetProjectDirectoriesByPackageId()
+{
+    var result = new Dictionary<string, DirectoryPath>(StringComparer.OrdinalIgnoreCase);
+    foreach (var project in GetFiles("./src/**/*.csproj"))
+    {
+        var properties = XDocument.Load(project.FullPath).Descendants();
+        string GetProperty(string name) => properties
+            .Where(x => x.Name.LocalName == name)
+            .Select(x => x.Value.Trim())
+            .FirstOrDefault(x => x.Length > 0);
+
+        if (String.Equals(GetProperty("IsPackable"), "false", StringComparison.OrdinalIgnoreCase))
+            continue;
+
+        var packageId = GetProperty("PackageId")
+            ?? GetProperty("AssemblyName")
+            ?? project.GetFilenameWithoutExtension().ToString();
+        result[packageId] = project.GetDirectory();
+    }
+
+    return result;
+}
+
+(string PackageId, string Version) ReadPackageIdentity(FilePath nupkg)
+{
+    using var archive = ZipFile.OpenRead(nupkg.FullPath);
+    var nuspecEntry = archive.Entries.Single(x => x.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
+    using var stream = nuspecEntry.Open();
+    var metadata = XDocument.Load(stream).Descendants().First(x => x.Name.LocalName == "metadata");
+
+    string Get(string name) => metadata.Elements().First(x => x.Name.LocalName == name).Value.Trim();
+    return (Get("id"), Get("version"));
+}
+
+bool GitHubReleaseExists(string tag)
+{
+    var exitCode = StartProcess("gh", new ProcessSettings
+    {
+        Arguments = new ProcessArgumentBuilder().Append("release").Append("view").AppendQuoted(tag),
+        RedirectStandardOutput = true,
+        RedirectStandardError = true
+    });
+
+    return exitCode == 0;
+}
+
+// Notes come from the "## [<version>]" section of the project CHANGELOG.md, falling back to the repository one.
+string BuildReleaseNotes(DirectoryPath projectDir, string packageId, string version, string repository, string tag)
+{
+    var changelogPath = new[]
+        {
+            projectDir.CombineWithFilePath("CHANGELOG.md"),
+            MakeAbsolute(File("./CHANGELOG.md"))
+        }
+        .FirstOrDefault(x => FileExists(x));
+
+    var section = new List<string>();
+    if (changelogPath != null)
+    {
+        var inSection = false;
+        foreach (var line in System.IO.File.ReadAllLines(changelogPath.FullPath))
+        {
+            if (line.StartsWith("## ["))
+            {
+                if (inSection)
+                    break;
+
+                inSection = line.StartsWith($"## [{version}]");
+                continue;
+            }
+
+            if (inSection)
+                section.Add(line);
+        }
+    }
+
+    string notes;
+    if (section.Count > 0)
+    {
+        notes = String.Join("\n", section).Trim();
+    }
+    else if (changelogPath != null && repository != null)
+    {
+        var relativePath = MakeAbsolute(Directory(".")).GetRelativePath(changelogPath);
+        notes = $"See [CHANGELOG](https://github.com/{repository}/blob/{tag}/{relativePath}).";
+    }
+    else
+    {
+        notes = $"{packageId} {version}";
+    }
+
+    return $"{notes}\n\n---\n\nNuGet: https://www.nuget.org/packages/{packageId}/{version}\n";
+}

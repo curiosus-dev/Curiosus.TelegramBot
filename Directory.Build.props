@@ -1,7 +1,11 @@
 <Project>
-	<PropertyGroup>
-		<ImplicitUsings>enable</ImplicitUsings>
-		<Nullable>enable</Nullable>
-		<LangVersion>latest</LangVersion>
-	</PropertyGroup>
+
+    <Import Project="$(MSBuildThisFileDirectory)build/Curiosus.props" />
+
+    <PropertyGroup>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <LangVersion>latest</LangVersion>
+    </PropertyGroup>
+
 </Project>

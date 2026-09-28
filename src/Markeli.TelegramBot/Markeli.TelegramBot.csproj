@@ -16,15 +16,6 @@
 		<PackageReleaseNotes>See CHANGELOG.md</PackageReleaseNotes>
 
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
-
-		<!-- SourceLink -->
-		<PublishRepositoryUrl>true</PublishRepositoryUrl>
-		<EmbedUntrackedSources>true</EmbedUntrackedSources>
-		<IncludeSymbols>true</IncludeSymbols>
-		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
-
-		<!-- Deterministic builds for CI -->
-		<ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -37,7 +28,6 @@
 
 	<ItemGroup>
 		<PackageReference Include="Telegram.Bot" />
-		<PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
 		<PackageReference Include="Microsoft.Extensions.Caching.Memory" />
 		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
