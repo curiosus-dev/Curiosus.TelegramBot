@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Removed
+
+- **Breaking:** dropped the `net8.0` target framework. Supported targets are now `net9.0` and `net10.0`.
+
+### Changed
+
+- Updated `Telegram.Bot` to 22.10.3.2 and `Microsoft.Extensions.*` to 9.0.20 (`net9.0`) and 10.0.12 (`net10.0`).
+
 ## [2.0.0] - 2026-09-28
 
 ### Changed

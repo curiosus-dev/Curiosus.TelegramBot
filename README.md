@@ -37,7 +37,7 @@ so a bot is a set of command handlers and nothing else:
 
 ### Prerequisites
 
-- [.NET 8.0](https://dotnet.microsoft.com/download/dotnet/8.0) or later
+- [.NET 9.0](https://dotnet.microsoft.com/download/dotnet/9.0) or later
 - Telegram Bot API token — create one via [BotFather](https://core.telegram.org/bots#botfather)
 
 ### Installation
