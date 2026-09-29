@@ -121,7 +121,8 @@ The root `README.md` of every repository has these sections, in this order:
 
 1. Title and a one-line description of what the library does.
 2. Badges: build (`release-packages.yml` on the default branch), license, NuGet downloads (of the main package
-   when there are several), code coverage (`coverage.json`), a documentation link when there is a docs site.
+   when there are several), code coverage (`coverage.json`), and when there is a docs site the `docs.yml` workflow
+   badge linking to it: `[![Docs](https://github.com/curiosus-dev/<repository>/actions/workflows/docs.yml/badge.svg?branch=main)](https://curiosus-dev.github.io/<repository>/)`.
 3. **Why use it** — the problems it solves and what sets it apart.
 4. **Features** — a short list, linking to the documentation where it exists.
 5. **Quick start** — `dotnet add package` and the smallest working example.
@@ -146,6 +147,7 @@ Docusaurus project, never edit it. `.github/workflows/docs.yml` builds the site 
   don't add front matter to symlinked files, and keep their links absolute.
 - Sources are compiled as MDX, so they must stay valid for MDX, GitHub and nuget.org: prefer Markdown to HTML,
   self-close void tags (`<br />`), no string `style` attributes, bare `{` and `<` only in code. Broken links fail the build.
+- Search is a local index built with the site; `algolia` keys in `docs.json` switch it to Algolia DocSearch.
 - Preview: `cd website && npm ci && npm start`.
 
 ## Code style
