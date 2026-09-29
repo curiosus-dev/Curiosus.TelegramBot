@@ -195,6 +195,10 @@ Task("GitHubReleases")
         if (!githubReleaseDryRun && (String.IsNullOrEmpty(repository) || String.IsNullOrEmpty(commitSha)))
             throw new CakeException("GITHUB_REPOSITORY or GITHUB_SHA is not set. Pass --githubReleaseDryRun to run locally.");
 
+        // A maintenance release (e.g. 1.4.1 from release/1.x) must not become "Latest" over 2.0.0.
+        var defaultBranch = EnvironmentVariable("DEFAULT_BRANCH");
+        var isDefaultBranch = String.IsNullOrEmpty(defaultBranch) || EnvironmentVariable("GITHUB_REF_NAME") == defaultBranch;
+
         var releaseNotesDir = artifactsDir.Combine("release-notes");
         EnsureDirectoryExists(releaseNotesDir);
 
@@ -233,7 +237,7 @@ Task("GitHubReleases")
                 .Append("--target").Append(commitSha)
                 .Append("--title").AppendQuoted($"{packageId} v{version}")
                 .Append("--notes-file").AppendQuoted(notesFile.FullPath);
-            if (!isSinglePackageRepository)
+            if (!isSinglePackageRepository || !isDefaultBranch)
                 arguments.Append("--latest=false");
             if (version.Contains('-'))
                 arguments.Append("--prerelease");

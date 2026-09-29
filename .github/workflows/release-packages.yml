@@ -84,10 +84,13 @@ jobs:
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
           GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
 
   # Separate from publish, so a failed badge update never blocks a release.
   coverage-badge:
     needs: build
+    # Badges show the default branch, not maintenance releases.
+    if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     permissions:
       contents: write # commits to the badges branch
