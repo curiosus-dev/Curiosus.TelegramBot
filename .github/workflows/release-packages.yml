@@ -6,15 +6,16 @@
 # per package, shields.io endpoint badges:
 # https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/<owner>/<repository>/badges/coverage.json
 # nuget.org policy: owner = repository owner, repository = this repository, workflow file = release-packages.yml,
-# environment = nuget. The nuget environment (dotnet-tools/settings/environments.json) deploys from main only: a workflow
-# file can be changed in any branch, the environment branch policy can't, so only main gets a token nuget.org accepts.
+# environment = nuget. The nuget environment (dotnet-tools/settings/environments.json) deploys from main and release/*
+# only: a workflow file can be changed in any branch, the environment branch policy can't, so only those branches get
+# a token nuget.org accepts. release/* branches can be created by admins only (restrict-release-branches ruleset).
 # Required repository secret: NUGET_USER - nuget.org profile name (not an email).
 
 name: Release packages
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'release/*' ] # release/<major>.x: maintenance of an older major
   workflow_dispatch:
 
 concurrency:
@@ -27,7 +28,7 @@ permissions:
 jobs:
   build:
     # workflow_dispatch can be started on any branch.
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')
     runs-on: ubuntu-latest
 
     steps:

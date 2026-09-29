@@ -71,10 +71,11 @@ The CHANGELOG is the only place for a version: `build/Curiosus.props` sets `Vers
 `## [x.y.z]` section of its CHANGELOG (`## [Unreleased]` is skipped), so project files have no `<Version>` or
 `<PackageVersion>`, and packing fails without a CHANGELOG version.
 
-`.github/workflows/release-packages.yml` runs on every push to `main` (the default branch of every repository): build,
-tests, pack, push to nuget.org via NuGet Trusted Publishing (no API keys) from the `nuget` environment, which deploys
-from `main` only, then a tag and a GitHub release for every package version that has none. Versions already on nuget.org
-are skipped. Pre-releases (`## [3.0.0-rc.1]`) are released the same way from `main`, not from feature branches.
+`.github/workflows/release-packages.yml` runs on every push to `main` (the default branch of every repository) and to
+`release/*` maintenance branches: build, tests, pack, push to nuget.org via NuGet Trusted Publishing (no API keys) from
+the `nuget` environment, which deploys from these branches only, then a tag and a GitHub release for every package
+version that has none. Versions already on nuget.org are skipped. Pre-releases (`## [3.0.0-rc.1]`) are released the same
+way from `main`, not from feature branches.
 
 CHANGELOG rules:
 
@@ -96,20 +97,16 @@ Tags are `v<version>` in single-package repositories and `<PackageId>.v<version>
 
 ### Maintenance of an older major version
 
-Not set up yet: every package has a single major so far. When the first package gets a new major and the previous one
-needs fixes (security ones first of all):
+When a package has a new major and the previous one needs fixes (security ones first of all):
 
-1. Enable releases from `release/**` in dotnet-tools, in one pull request: the `release-packages.yml` trigger and
-   build job condition, a `release/*` branch policy of the `nuget` environment (`settings/environments.json`), and
-   rulesets for `release/**` — pull requests with required checks, no force pushes or deletion, branch creation by
-   admins only. Without the last one anyone who can create a branch could publish.
-2. Create `release/<major>.x` from the last tag of that major (`v1.4.0`, or `<PackageId>.v1.4.0` in multi-package
-   repositories). Its first pull request brings the current synced files from `main` (`build/`, workflows,
-   `.editorconfig`, ...): sync pull requests go to the default branch only, and an old tag has old build files.
-3. Fix in `main` first (security fixes through the temporary private fork of the security advisory), then cherry-pick
+1. An admin creates `release/<major>.x` from the last tag of that major (`v1.4.0`, or `<PackageId>.v1.4.0`
+   in multi-package repositories): only admins can create `release/*` branches, since they publish. Its first pull
+   request brings the current synced files from `main` (`build/`, workflows, `.editorconfig`, ...): sync pull
+   requests go to the default branch only, and an old tag has old build files.
+2. Fix in `main` first (security fixes through the temporary private fork of the security advisory), then cherry-pick
    into a branch from `release/<major>.x` with a `## [1.4.1]` CHANGELOG section, and open the pull request to
    `release/<major>.x`. The merge publishes 1.4.1; its GitHub release is not marked "Latest", coverage badges stay.
-4. In the security advisory list the patched version of each line: `>= 2.0.1` and `>= 1.4.1, < 2.0.0`.
+3. In the security advisory list the patched version of each line: `>= 2.0.1` and `>= 1.4.1, < 2.0.0`.
 
 Dependabot security updates open pull requests to the default branch only: update vulnerable dependencies of
 `release/*` by hand. Cherry-picks into a branch far behind `main` can conflict, synced files included.
