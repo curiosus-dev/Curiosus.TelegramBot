@@ -4,7 +4,7 @@
 
 ### Removed
 
-- **Breaking:** dropped the `net8.0` target framework. Supported targets are now `net9.0` and `net10.0`.
+- **Breaking:** dropped the `net8.0` target framework. Supported targets are now `net9.0` and `net10.0`: move the consuming project to `net9.0` or later, or stay on 2.x while it targets `net8.0`.
 
 ### Changed
 
