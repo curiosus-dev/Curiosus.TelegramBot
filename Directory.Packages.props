@@ -4,7 +4,7 @@
   </PropertyGroup>
   <!-- Framework-independent packages -->
   <ItemGroup>
-    <PackageVersion Include="Telegram.Bot" Version="22.10.3.2" />
+    <PackageVersion Include="Telegram.Bot" Version="22.10.2.1" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
@@ -12,18 +12,18 @@
   </ItemGroup>
   <!-- Microsoft.Extensions.* — net9.0 -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="9.0.20" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.20" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.20" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="9.0.20" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.20" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.0" />
   </ItemGroup>
   <!-- Microsoft.Extensions.* — net10.0 -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.0" />
   </ItemGroup>
 </Project>
