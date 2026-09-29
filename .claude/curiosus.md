@@ -12,7 +12,8 @@ Shared by all Curiosus .NET libraries. Repository specifics live in the reposito
 - Tests: xUnit, Moq, FluentAssertions; integration tests run real infrastructure with Testcontainers (Docker).
 - Build: Cake (`build.cake` + synced `build/curiosus.cake`), the same pipeline locally and on CI.
 - CI/CD: GitHub Actions, NuGet Trusted Publishing, Dependabot security updates.
-- Documentation: `README.md` files; larger libraries also have MkDocs sites on Read the Docs built from `docs/`.
+- Documentation: `README.md` files; larger libraries also have Docusaurus sites on GitHub Pages
+  (`https://curiosus-dev.github.io/<repository>/`) built from `docs/` (see Documentation site below).
 
 ## Use Curiosus packages first
 
@@ -120,7 +121,7 @@ The root `README.md` of every repository has these sections, in this order:
 
 1. Title and a one-line description of what the library does.
 2. Badges: build (`release-packages.yml` on the default branch), license, NuGet downloads (of the main package
-   when there are several), code coverage (`coverage.json`), documentation status when there is a docs site.
+   when there are several), code coverage (`coverage.json`), a documentation link when there is a docs site.
 3. **Why use it** — the problems it solves and what sets it apart.
 4. **Features** — a short list, linking to the documentation where it exists.
 5. **Quick start** — `dotnet add package` and the smallest working example.
@@ -133,6 +134,19 @@ Every package of a multi-package repository has its own `README.md` next to the 
 on nuget.org by `build/Curiosus.props`: title, one-line description, NuGet/coverage badges, installation, a short usage
 example, links to the repository README and the documentation. nuget.org renders it outside GitHub, so links and images
 use absolute URLs. Single-package repositories pack the root `README.md` instead.
+
+## Documentation site
+
+Repositories with a site have `docs.json` (title, tagline) and `docs/` in the root; `website/` is the synced
+Docusaurus project, never edit it. `.github/workflows/docs.yml` builds the site on pull requests and deploys it from `main`.
+
+- Pages live in `docs/`; the sidebar follows the directories, `sidebar_position` front matter and `_category_.json`.
+- READMEs and CHANGELOGs appear on the site through relative symlinks in `docs/` (for example
+  `docs/changelog/curiosus-migrations.md -> ../../src/Curiosus.Migrations/CHANGELOG.md`). Add one for a new package;
+  don't add front matter to symlinked files, and keep their links absolute.
+- Sources are compiled as MDX, so they must stay valid for MDX, GitHub and nuget.org: prefer Markdown to HTML,
+  self-close void tags (`<br />`), no string `style` attributes, bare `{` and `<` only in code. Broken links fail the build.
+- Preview: `cd website && npm ci && npm start`.
 
 ## Code style
 
@@ -154,6 +168,7 @@ Change them there, local edits are overwritten by the next sync:
 - `build/curiosus.cake`, `build/Curiosus.props`
 - `.github/workflows/build.yml`, `.github/workflows/release-packages.yml`, `.github/dependabot.yml`
 - `.claude/curiosus.md`
+- `website/` and `.github/workflows/docs.yml` in repositories with a documentation site
 
 Repository settings (rulesets, allowed actions, security features) are managed from `dotnet-tools/settings`,
 don't change them in the repository settings UI. Actions in workflows must be pinned to a commit SHA.
