@@ -20,7 +20,7 @@ find src tests -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
 
 ## Architecture
 
-NuGet library for building Telegram bots on .NET. Single solution, single library project + test project. Targets `net8.0` through `net10.0`.
+NuGet library for building Telegram bots on .NET. Single solution, single library project + test project. Targets `net9.0` and `net10.0`.
 
 **Update processing pipeline:**
 
