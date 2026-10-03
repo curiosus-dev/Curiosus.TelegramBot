@@ -27,23 +27,14 @@ so a bot is a set of command handlers and nothing else:
 
 ## Features
 
-- **Command dispatching** — register handlers via `ITelegramBotCommandHandler`; an update goes to the handler whose
-  `CommandText` the message starts with as a whole word (`/ping`, `/ping now`, `/ping@MyBot`, but not `/pinger`),
-  the longest `CommandText` wins. Handlers also declare the update and message types they accept.
-- **Multi-step commands (state machine)** — a handler returns a state, and the next message of the chat comes back to
-  the same handler with that state, so a command is a state machine over the conversation: questionnaires, wizards,
-  confirmations. Custom states derive from `TelegramBotCommandStateBase`; a state lives in memory for an hour after
-  the last step, and sending another `/command` leaves the flow. See [Multi-step commands](#multi-step-commands).
-- **Update queue** — updates are processed with bounded parallelism (`MaxDegreeOfParallelism`) and optional per-key
-  locks (`TryGetLockKey`). With `QueuePersistenceFilePath` set, pending updates are saved to disk on graceful shutdown
-  and processed after the next start.
-- **Authentication** — chats from `AllowedChatIds` are served right away, other chats must send the password first.
-- **HTTP proxy** — route all Bot API traffic through a proxy with optional credentials (`HttpProxy`).
-- **Built-in `/help` command** — opt-in handler that lists all registered commands via `AddHelpCommand()`.
-- **Rich message support** — rich formatted messages (Bot API 10.1) are routed like plain text via
-  `Update.GetMessageText()`, with structured blocks available through `Update.GetRichBlocks()`.
-- **Hosting and DI** — `AddTelegramBotInfrastructure` / `AddTelegramBotCommandHandler<T>` register everything in
-  `IServiceCollection`, the bot runs as an `IHostedService`; options are validated at registration time.
+- **Command dispatching** — one `ITelegramBotCommandHandler` per command, routing is done for you.
+- **Multi-step commands** — a command is a state machine over the conversation: return a state, get the next message.
+- **Update queue** — bounded parallelism, per-key locks, pending updates saved to disk on shutdown.
+- **Authentication** — allowed chat IDs and a password for everyone else.
+- **HTTP proxy** — route Bot API traffic through a proxy.
+- **Built-in `/help`** — lists all registered commands.
+- **Rich messages** — Bot API 10.1 rich messages are routed like plain text.
+- **Hosting and DI** — one `AddTelegramBotInfrastructure` call, the bot runs as an `IHostedService`.
 
 ## How it differs
 
