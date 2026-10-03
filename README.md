@@ -27,14 +27,18 @@ so a bot is a set of command handlers and nothing else:
 
 ## Features
 
-- **Command dispatching** — one `ITelegramBotCommandHandler` per command, routing is done for you.
-- **Multi-step commands** — a command is a state machine over the conversation: return a state, get the next message.
-- **Update queue** — bounded parallelism, per-key locks, pending updates saved to disk on shutdown.
-- **Authentication** — allowed chat IDs and a password for everyone else.
-- **HTTP proxy** — route Bot API traffic through a proxy.
-- **Built-in `/help`** — lists all registered commands.
-- **Rich messages** — Bot API 10.1 rich messages are routed like plain text.
-- **Hosting and DI** — one `AddTelegramBotInfrastructure` call, the bot runs as an `IHostedService`.
+- **Command dispatching** — one `ITelegramBotCommandHandler` per command: you write what the command does, the
+  library decides which handler gets the update and rejects message types the handler doesn't support.
+- **Multi-step commands** — a command is a state machine over the conversation: return a state and the next message
+  of the chat comes back to the same handler, so questionnaires and wizards need no session plumbing.
+- **Update queue** — bounded parallelism and per-key locks keep a burst of messages from overloading the bot or
+  running the same command twice at once; pending updates are saved to disk on shutdown, so a deploy loses nothing.
+- **Authentication** — a private bot without extra code: allowed chat IDs pass right away, others need a password.
+- **HTTP proxy** — run the bot where Telegram is reachable only through a proxy.
+- **Built-in `/help`** — users see the list of commands without you maintaining it by hand.
+- **Rich messages** — Bot API 10.1 rich messages reach handlers as plain text, so existing commands keep working.
+- **Hosting and DI** — one `AddTelegramBotInfrastructure` call; the bot runs as an `IHostedService` and invalid options
+  fail at startup, not on the first message.
 
 ## How it differs
 
