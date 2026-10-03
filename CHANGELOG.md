@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.0.1] - 2026-10-03
+
+### Fixed
+
+- A command matched any message that merely started with its `CommandText`: `/pinger` went to the `/ping` handler.
+  The command text must now be followed by the end of the message, whitespace or `@` (`/ping now`, `/ping@MyBot`).
+  When several commands match, the one with the longest `CommandText` wins instead of the first registered one, and
+  matching is ordinal instead of culture-sensitive.
+
 ## [3.0.0] - 2026-09-29
 
 ### Removed
