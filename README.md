@@ -1,6 +1,7 @@
 # Curiosus.TelegramBot
 
-Infrastructure library for building Telegram bots on .NET: command dispatching, multi-step state management, update queue with persistence, and simple chat authentication.
+Infrastructure library for building Telegram bots on .NET: command dispatching, multi-step commands as a state machine,
+a bounded update queue that survives restarts, chat authentication and HTTP proxy support.
 
 [![Build](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml/badge.svg?branch=main)](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml)
 [![License](https://img.shields.io/github/license/curiosus-dev/Curiosus.TelegramBot)](https://github.com/curiosus-dev/Curiosus.TelegramBot/blob/main/LICENSE)
@@ -19,19 +20,45 @@ so a bot is a set of command handlers and nothing else:
   message type is done for you.
 - **Conversations out of the box** — return a state and the next message of the chat comes back to the same handler.
 - **Safe under load** — bounded parallelism, optional per-key locks for commands that must not run concurrently,
-  and pending updates survive a graceful restart when queue persistence is on.
+  and pending updates survive a graceful restart when queue persistence is on: the bot drains in-flight work and saves
+  the rest of the queue to disk before it stops.
 - **Private bots in one line** — allowed chat IDs and a password challenge for everyone else.
 - **Zero startup code** — the bot runs as an `IHostedService` registered by `AddTelegramBotInfrastructure`.
 
 ## Features
 
-- **Command dispatching** — register handlers via `ITelegramBotCommandHandler`, route updates by command text and supported update/message types.
-- **State management** — multi-step conversational commands with in-memory state cache (`TelegramBotCommandStateBase`).
-- **Update queue** — thread-safe queue with configurable parallelism and optional disk persistence on shutdown.
-- **Authentication** — simple password-based chat verification with allowed chat ID filtering.
+- **Command dispatching** — register handlers via `ITelegramBotCommandHandler`; an update goes to the handler whose
+  `CommandText` the message starts with as a whole word (`/ping`, `/ping now`, `/ping@MyBot`, but not `/pinger`),
+  the longest `CommandText` wins. Handlers also declare the update and message types they accept.
+- **Multi-step commands (state machine)** — a handler returns a state, and the next message of the chat comes back to
+  the same handler with that state, so a command is a state machine over the conversation: questionnaires, wizards,
+  confirmations. Custom states derive from `TelegramBotCommandStateBase`; a state lives in memory for an hour after
+  the last step, and sending another `/command` leaves the flow. See [Multi-step commands](#multi-step-commands).
+- **Update queue** — updates are processed with bounded parallelism (`MaxDegreeOfParallelism`) and optional per-key
+  locks (`TryGetLockKey`). With `QueuePersistenceFilePath` set, pending updates are saved to disk on graceful shutdown
+  and processed after the next start.
+- **Authentication** — chats from `AllowedChatIds` are served right away, other chats must send the password first.
+- **HTTP proxy** — route all Bot API traffic through a proxy with optional credentials (`HttpProxy`).
 - **Built-in `/help` command** — opt-in handler that lists all registered commands via `AddHelpCommand()`.
-- **Rich message support** — rich formatted messages (Bot API 10.1) are routed like plain text via `Update.GetMessageText()`, with structured blocks available through `Update.GetRichBlocks()`.
-- **DI integration** — `AddTelegramBotInfrastructure` / `AddTelegramBotCommandHandler<T>` extensions for `IServiceCollection`.
+- **Rich message support** — rich formatted messages (Bot API 10.1) are routed like plain text via
+  `Update.GetMessageText()`, with structured blocks available through `Update.GetRichBlocks()`.
+- **Hosting and DI** — `AddTelegramBotInfrastructure` / `AddTelegramBotCommandHandler<T>` register everything in
+  `IServiceCollection`, the bot runs as an `IHostedService`; options are validated at registration time.
+
+## How it differs
+
+Many .NET Telegram bot frameworks focus on routing and UI (menus, keyboards). Curiosus.TelegramBot focuses on running
+a bot reliably as a service:
+
+- **Bounded, lock-aware processing** instead of a task per update: a burst of updates can't exhaust the thread pool or
+  the database, and commands that must not run concurrently are serialized by a key you choose.
+- **No lost updates on deploy**: graceful shutdown waits for in-flight handlers and persists the rest of the queue.
+- **No unbounded memory growth**: conversation states expire, nothing is kept per update.
+- **Private bots without extra code**: an allow-list plus a password challenge for everyone else.
+- **Plain Telegram.Bot inside**: handlers get `ITelegramBotClient` and `Update` as they are, nothing to relearn.
+
+Not there yet: inline keyboards and callback queries, persistent conversation state, scoped handlers, middleware
+and webhooks are planned for 4.0 — see [Roadmap](#roadmap).
 
 ## Quick start
 
@@ -153,7 +180,9 @@ Chats listed in `AllowedChatIds` are authorized automatically. When an unknown c
 3. If incorrect, the bot replies *"Incorrect password! Please, try again."*
 ## Multi-step commands
 
-Return `WithSimpleState()` from `ProcessCommandAsync` to keep the conversation going — the next message from that chat will be routed to the same handler with the previous state:
+A multi-step command is a state machine over the conversation: each step reads the current state, answers the user
+and returns the next state, or no state to finish. Return `WithSimpleState()` from `ProcessCommandAsync` to keep the
+conversation going — the next message from that chat will be routed to the same handler with the previous state:
 
 ```csharp
 public class GreetCommandHandler : ITelegramBotCommandHandler
@@ -187,6 +216,9 @@ public class GreetCommandHandler : ITelegramBotCommandHandler
 For custom state data, implement `ITelegramBotCommandState` (or extend `TelegramBotCommandStateBase` for timestamps) and return it via `new TelegramBotCommandProcessingResult { State = myState }`.
 
 The user can abort a multi-step flow at any time by sending another `/command` — it will be matched to the new handler instead.
+
+States are kept per chat in memory and expire an hour after the last step; they don't survive a restart yet
+(persistent state storage is planned for 4.0).
 ## Rich messages
 
 A rich formatted message (Bot API 10.1) carries its content in `Message.RichMessage` and leaves `Message.Text` unset, so it arrives as `MessageType.RichMessage` rather than `MessageType.Text`.
@@ -260,6 +292,13 @@ source and maps every package pattern to nuget.org, so restore behaves identical
 | Package | Version | Downloads | Coverage |
 |---|---|---|---|
 | [Curiosus.TelegramBot](https://github.com/curiosus-dev/Curiosus.TelegramBot#readme) | [![NuGet](https://img.shields.io/nuget/v/Curiosus.TelegramBot)](https://www.nuget.org/packages/Curiosus.TelegramBot) | [![Downloads](https://img.shields.io/nuget/dt/Curiosus.TelegramBot)](https://www.nuget.org/packages/Curiosus.TelegramBot) | [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/curiosus-dev/Curiosus.TelegramBot/badges/coverage.json)](https://github.com/curiosus-dev/Curiosus.TelegramBot/actions/workflows/release-packages.yml) |
+
+## Roadmap
+
+Version 4.0 is tracked in the [v4 milestone](https://github.com/curiosus-dev/Curiosus.TelegramBot/milestone/1):
+inline keyboards and callback queries, pluggable storage for the update queue, conversation state and authorized chats,
+configurable state key (chat, user or topic), scoped command handlers, a middleware pipeline, webhooks as a separate
+package and ready-made controls (date/time pickers, lists, yes/no).
 
 ## License
 
