@@ -27,23 +27,18 @@ so a bot is a set of command handlers and nothing else:
 
 ## Features
 
-- **Command dispatching** — register handlers via `ITelegramBotCommandHandler`; an update goes to the handler whose
-  `CommandText` the message starts with as a whole word (`/ping`, `/ping now`, `/ping@MyBot`, but not `/pinger`),
-  the longest `CommandText` wins. Handlers also declare the update and message types they accept.
-- **Multi-step commands (state machine)** — a handler returns a state, and the next message of the chat comes back to
-  the same handler with that state, so a command is a state machine over the conversation: questionnaires, wizards,
-  confirmations. Custom states derive from `TelegramBotCommandStateBase`; a state lives in memory for an hour after
-  the last step, and sending another `/command` leaves the flow. See [Multi-step commands](#multi-step-commands).
-- **Update queue** — updates are processed with bounded parallelism (`MaxDegreeOfParallelism`) and optional per-key
-  locks (`TryGetLockKey`). With `QueuePersistenceFilePath` set, pending updates are saved to disk on graceful shutdown
-  and processed after the next start.
-- **Authentication** — chats from `AllowedChatIds` are served right away, other chats must send the password first.
-- **HTTP proxy** — route all Bot API traffic through a proxy with optional credentials (`HttpProxy`).
-- **Built-in `/help` command** — opt-in handler that lists all registered commands via `AddHelpCommand()`.
-- **Rich message support** — rich formatted messages (Bot API 10.1) are routed like plain text via
-  `Update.GetMessageText()`, with structured blocks available through `Update.GetRichBlocks()`.
-- **Hosting and DI** — `AddTelegramBotInfrastructure` / `AddTelegramBotCommandHandler<T>` register everything in
-  `IServiceCollection`, the bot runs as an `IHostedService`; options are validated at registration time.
+- **Command dispatching** — one `ITelegramBotCommandHandler` per command: you write what the command does, the
+  library decides which handler gets the update and rejects message types the handler doesn't support.
+- **Multi-step commands** — a command is a state machine over the conversation: return a state and the next message
+  of the chat comes back to the same handler, so questionnaires and wizards need no session plumbing.
+- **Update queue** — bounded parallelism and per-key locks keep a burst of messages from overloading the bot or
+  running the same command twice at once; pending updates are saved to disk on shutdown, so a deploy loses nothing.
+- **Authentication** — a private bot without extra code: allowed chat IDs pass right away, others need a password.
+- **HTTP proxy** — run the bot where Telegram is reachable only through a proxy.
+- **Built-in `/help`** — users see the list of commands without you maintaining it by hand.
+- **Rich messages** — Bot API 10.1 rich messages reach handlers as plain text, so existing commands keep working.
+- **Hosting and DI** — one `AddTelegramBotInfrastructure` call; the bot runs as an `IHostedService` and invalid options
+  fail at startup, not on the first message.
 
 ## How it differs
 
