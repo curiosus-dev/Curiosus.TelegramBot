@@ -63,7 +63,8 @@ public class TelegramBotUpdateDispatcher : IHostedService
         _botClient = botClient;
         _stateCache = stateCache;
 
-        _telegramCommands = commands.ToArray();
+        // the longest command text wins when several match, e.g. "/report daily" over "/report"
+        _telegramCommands = commands.OrderByDescending(x => x.CommandText.Length).ToArray();
         _supportedUpdateTypes = new HashSet<UpdateType>(_telegramCommands
             .SelectMany(x => x.SupportedUpdateTypes)
             .Distinct()
@@ -233,7 +234,7 @@ public class TelegramBotUpdateDispatcher : IHostedService
 
             if (!String.IsNullOrEmpty(messageText) && messageText.StartsWith("/"))
             {
-                var nestedCommand = _telegramCommands.FirstOrDefault(x => messageText.StartsWith(x.CommandText));
+                var nestedCommand = FindCommand(messageText);
                 if (nestedCommand != null)
                 {
                     return nestedCommand;
@@ -245,10 +246,29 @@ public class TelegramBotUpdateDispatcher : IHostedService
 
         if (!String.IsNullOrEmpty(messageText))
         {
-            return _telegramCommands.FirstOrDefault(x => messageText.StartsWith(x.CommandText));
+            return FindCommand(messageText);
         }
 
         return null;
+    }
+
+    private ITelegramBotCommandHandler? FindCommand(string messageText) =>
+        _telegramCommands.FirstOrDefault(x => IsCommandMatch(messageText, x.CommandText));
+
+    /// <summary>
+    /// Checks that the message starts with the whole command text: the command is followed by the end of the message,
+    /// whitespace or <c>@</c> (as in <c>/ping@MyBot</c>), so <c>/pinger</c> does not match <c>/ping</c>.
+    /// </summary>
+    internal static bool IsCommandMatch(string messageText, string commandText)
+    {
+        if (String.IsNullOrEmpty(commandText) || !messageText.StartsWith(commandText, StringComparison.Ordinal))
+            return false;
+
+        if (messageText.Length == commandText.Length)
+            return true;
+
+        var next = messageText[commandText.Length];
+        return Char.IsWhiteSpace(next) || next == '@';
     }
 
     private async Task SendUnsupportedCommandNotificationAsync(

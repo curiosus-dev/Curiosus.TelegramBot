@@ -106,6 +106,58 @@ public class TelegramBotUpdateDispatcherTests
                 _stateCache));
     }
 
+    [Theory]
+    [InlineData("/ping", "/ping", true)]
+    [InlineData("/ping now", "/ping", true)]
+    [InlineData("/ping\nnow", "/ping", true)]
+    [InlineData("/ping@MyBot", "/ping", true)]
+    [InlineData("Show report", "Show report", true)]
+    [InlineData("Show report today", "Show report", true)]
+    [InlineData("/pinger", "/ping", false)]
+    [InlineData("/pin", "/ping", false)]
+    [InlineData("/PING", "/ping", false)]
+    [InlineData("Show reports", "Show report", false)]
+    [InlineData("/ping", "", false)]
+    public void IsCommandMatch_MatchesWholeCommandText(string messageText, string commandText, bool expected)
+    {
+        Assert.Equal(expected, TelegramBotUpdateDispatcher.IsCommandMatch(messageText, commandText));
+    }
+
+    [Fact]
+    public void ResolveCommand_CommandWithLongerName_DoesNotResolveShorterCommand()
+    {
+        var ping = CreateMockCommand("ping", "/ping");
+        var dispatcher = CreateDispatcher(new[] { ping.Object });
+
+        var resolved = dispatcher.ResolveCommand(CreateRichUpdate(100, "/pinger"), 100);
+
+        Assert.Null(resolved);
+    }
+
+    [Fact]
+    public void ResolveCommand_SeveralCommandsMatch_ResolvesLongestCommandText()
+    {
+        var report = CreateMockCommand("report", "/report");
+        var dailyReport = CreateMockCommand("daily report", "/report daily");
+        var dispatcher = CreateDispatcher(new[] { report.Object, dailyReport.Object });
+
+        var resolved = dispatcher.ResolveCommand(CreateRichUpdate(100, "/report daily now"), 100);
+
+        Assert.Same(dailyReport.Object, resolved);
+    }
+
+    [Fact]
+    public void ResolveCommand_CachedStateAndLongerCommandName_ReturnsCachedHandler()
+    {
+        var ping = CreateMockCommand("ping", "/ping");
+        var dispatcher = CreateDispatcher(new[] { ping.Object });
+        _stateCache.SetEntry(100, ping.Object, new SimpleCommandState());
+
+        var resolved = dispatcher.ResolveCommand(CreateRichUpdate(100, "/pinger"), 100);
+
+        Assert.Same(ping.Object, resolved);
+    }
+
     private static Update CreateRichUpdate(long chatId, string text)
     {
         return new Update
