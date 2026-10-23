@@ -153,12 +153,24 @@ public class TelegramUpdateProcessor
                 answer?.ShowAlert ?? false,
                 cancellationToken: cancellationToken);
         }
-        catch (ApiRequestException e)
+        catch (ApiRequestException e) when (IsExpiredQueryError(e))
         {
             // the handler answered the query itself, or it is too old to answer (e.g. restored from the persisted queue)
-            _logger.LogDebug(e, "Callback query {CallbackQueryId} was not answered", callbackQuery.Id);
+            _logger.LogDebug(e, "Callback query {CallbackQueryId} was already answered or expired", callbackQuery.Id);
+        }
+        catch (ApiRequestException e)
+        {
+            _logger.LogWarning(e, "Telegram rejected the answer to callback query {CallbackQueryId}", callbackQuery.Id);
         }
     }
+
+    /// <summary>
+    /// Telegram answers "query is too old and response timeout expired or query ID is invalid" both for a query that was
+    /// already answered and for an expired one.
+    /// </summary>
+    private static bool IsExpiredQueryError(ApiRequestException exception) =>
+        exception.Message.Contains("query is too old", StringComparison.OrdinalIgnoreCase)
+        || exception.Message.Contains("query ID is invalid", StringComparison.OrdinalIgnoreCase);
 
     private bool IsCommandSupportedForUpdate(ITelegramBotCommandHandler command, Update update)
     {
@@ -193,6 +205,17 @@ public class TelegramUpdateProcessor
             // and leaves the other handler's state alone
             var pressResult = await command.ProcessCommandAsync(_botClient, update, null, cancellationToken);
             LogExecuted(command, chatId);
+
+            if (pressResult.State != null)
+            {
+                _logger.LogWarning(
+                    "Command \"{CommandName}\" returned a state for a button press in chat ChatId={ChatId}, " +
+                    "but command \"{StateHolder}\" holds the chat's dialog: the returned state is discarded",
+                    command.CommandName,
+                    chatId,
+                    cachedState.CommandHandler.CommandName);
+            }
+
             return pressResult.CallbackAnswer;
         }
         else if (cachedState != null)

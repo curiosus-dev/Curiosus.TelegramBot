@@ -123,6 +123,9 @@ public class CallbackQueryProcessingTests
 
         await CreateProcessor().ProcessAsync(CreateCallbackUpdate(100), handler.Object, CancellationToken.None);
 
+        VerifyAnswered(r => r.CallbackQueryId == "query-1", Times.Once());
+        VerifyLogged(LogLevel.Debug, Times.AtLeastOnce());
+        VerifyLogged(LogLevel.Warning, Times.Never());
         _logger.Verify(
             x => x.Log(
                 LogLevel.Error,
@@ -131,6 +134,46 @@ public class CallbackQueryProcessingTests
                 It.IsAny<Exception?>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Never);
+    }
+
+    private void VerifyLogged(LogLevel level, Times times) =>
+        _logger.Verify(
+            x => x.Log(
+                level,
+                It.IsAny<EventId>(),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            times);
+
+    [Fact]
+    public async Task ProcessAsync_AnswerRejectedForOtherReason_LogsWarning()
+    {
+        _botClient
+            .Setup(x => x.SendRequest(It.IsAny<AnswerCallbackQueryRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ApiRequestException("Bad Request: MESSAGE_TOO_LONG", 400));
+        var handler = CreateHandler(result: new TelegramBotCommandProcessingResult
+        {
+            CallbackAnswer = new TelegramBotCallbackAnswer(new string('a', 250))
+        });
+
+        await CreateProcessor().ProcessAsync(CreateCallbackUpdate(100), handler.Object, CancellationToken.None);
+
+        VerifyLogged(LogLevel.Warning, Times.Once());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_CallbackForOtherHandlerReturningState_LogsWarningAndKeepsForeignState()
+    {
+        var dialog = CreateHandler("dialog", prefix: null);
+        var dialogState = new SimpleCommandState();
+        _stateCache.SetEntry(100, dialog.Object, dialogState);
+        var handler = CreateHandler(result: TelegramBotCommandProcessingResult.WithSimpleState());
+
+        await CreateProcessor().ProcessAsync(CreateCallbackUpdate(100), handler.Object, CancellationToken.None);
+
+        VerifyLogged(LogLevel.Warning, Times.Once());
+        Assert.Same(dialogState, _stateCache.GetEntry(100)?.CommandState);
     }
 
     [Fact]

@@ -264,7 +264,8 @@ await botClient.SendMessage(chatId, "Returned parcel", replyMarkup: keyboard);
   second answer is then ignored.
 - **Authorization**: by the chat of the button's message, channels included. A press in a chat that is not authorized
   is answered *"Not authorized."* and never starts the password flow.
-- **State**: a press routed to another handler runs without state and leaves the chat's dialog untouched.
+- **State**: a press routed to another handler runs without state and leaves the chat's dialog untouched; a state it
+  returns is discarded with a warning in the log.
 - Prefixes are checked at startup: non-empty, without `:`, unique, and the handler must support callback queries.
 
 Keyboard builders and pagination helpers are planned — see

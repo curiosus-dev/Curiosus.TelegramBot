@@ -26,6 +26,7 @@ public interface ITelegramBotCommandHandler
     /// <c>prefix</c> or <c>prefix:payload</c> are routed here (build the data with <see cref="CallbackData.Create"/>).
     /// The handler must also list <see cref="UpdateType.CallbackQuery"/> in <see cref="SupportedUpdateTypes"/>.
     /// Null (the default) — the handler serves no buttons of its own.
+    /// While another handler holds the chat's dialog, a press runs without state and a state it returns is discarded.
     /// </summary>
     string? CallbackDataPrefix => null;
 

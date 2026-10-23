@@ -22,6 +22,8 @@
   (*"Hi! Your chat ID is …"*), and a press nobody handles is answered *"This button is no longer supported."* instead of
   posting *"Unsupported command"* to the chat.
 - A button press routed to a handler other than the one holding the chat's conversation state no longer clears that state.
+- The dispatcher reads `CallbackDataPrefix` of every handler at startup: tests that build it with `MockBehavior.Strict`
+  handler mocks must set up `CallbackDataPrefix` (returning `null`); loose mocks and real handlers need no change.
 
 ## [3.0.1] - 2026-10-03
 
