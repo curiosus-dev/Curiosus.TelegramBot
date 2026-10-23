@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
+using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 
@@ -11,6 +12,8 @@ namespace Curiosus.TelegramBot;
 /// </summary>
 public class TelegramUpdateProcessor
 {
+    private const string NotAuthorizedButtonText = "Not authorized.";
+
     private readonly ILogger<TelegramUpdateProcessor> _logger;
     private readonly ITelegramBotClient _botClient;
     private readonly TelegramBotOptions _botOptions;
@@ -59,6 +62,12 @@ public class TelegramUpdateProcessor
 
         var chatId = update.GetChatId();
 
+        if (update.CallbackQuery is { } callbackQuery)
+        {
+            await ProcessCallbackQueryAsync(update, callbackQuery, chatId, command, cancellationToken);
+            return;
+        }
+
         try
         {
             if (!_allowedChatIds.ContainsKey(chatId))
@@ -85,6 +94,72 @@ public class TelegramUpdateProcessor
         }
     }
 
+    /// <summary>
+    /// A press is never answered with a chat message: an unauthorized chat or a press without a message (inline mode)
+    /// gets only the callback answer, and every press is answered, even when the handler fails.
+    /// </summary>
+    private async Task ProcessCallbackQueryAsync(
+        Update update,
+        CallbackQuery callbackQuery,
+        long chatId,
+        ITelegramBotCommandHandler command,
+        CancellationToken cancellationToken)
+    {
+        TelegramBotCallbackAnswer? answer = null;
+
+        try
+        {
+            if (callbackQuery.Message == null || !_allowedChatIds.ContainsKey(chatId))
+            {
+                _logger.LogDebug(
+                    "Button \"{CallbackData}\" pressed in a chat that is not authorized, ChatId={ChatId}",
+                    callbackQuery.Data,
+                    chatId);
+                answer = new TelegramBotCallbackAnswer(NotAuthorizedButtonText);
+                return;
+            }
+
+            if (!command.SupportedUpdateTypes.Contains(UpdateType.CallbackQuery))
+            {
+                _logger.LogDebug(
+                    "Command \"{CommandName}\" in chat ChatId={ChatId} does not support callback queries",
+                    command.CommandName,
+                    chatId);
+                return;
+            }
+
+            answer = await ExecuteCommandAsync(update, chatId, command, cancellationToken);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error processing callback query");
+        }
+        finally
+        {
+            await AnswerCallbackQueryAsync(callbackQuery, answer, cancellationToken);
+        }
+    }
+
+    private async Task AnswerCallbackQueryAsync(
+        CallbackQuery callbackQuery,
+        TelegramBotCallbackAnswer? answer,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _botClient.AnswerCallbackQuery(
+                callbackQuery.Id,
+                answer?.Text,
+                answer?.ShowAlert ?? false,
+                cancellationToken: cancellationToken);
+        }
+        catch (ApiRequestException e)
+        {
+            // the handler answered the query itself, or it is too old to answer (e.g. restored from the persisted queue)
+            _logger.LogDebug(e, "Callback query {CallbackQueryId} was not answered", callbackQuery.Id);
+        }
+    }
+
     private bool IsCommandSupportedForUpdate(ITelegramBotCommandHandler command, Update update)
     {
         if (!command.SupportedUpdateTypes.Contains(update.Type))
@@ -93,7 +168,7 @@ public class TelegramUpdateProcessor
         return update.Message == null || command.SupportedMessageTypes.Contains(update.Message.Type);
     }
 
-    private async Task ExecuteCommandAsync(
+    private async Task<TelegramBotCallbackAnswer?> ExecuteCommandAsync(
         Update update,
         long chatId,
         ITelegramBotCommandHandler command,
@@ -105,13 +180,22 @@ public class TelegramUpdateProcessor
             chatId);
 
         var cachedState = _stateCache.GetEntry(chatId);
+        var isOwnState = cachedState?.CommandHandler == command;
 
         ITelegramBotCommandState? commandState = null;
-        if (cachedState?.CommandHandler == command)
+        if (isOwnState)
         {
-            commandState = cachedState.CommandState;
+            commandState = cachedState!.CommandState;
         }
-        else if (cachedState != null && cachedState.CommandHandler != command)
+        else if (cachedState != null && update.CallbackQuery != null)
+        {
+            // a button of an old message must not break the dialog in progress: the press runs without state
+            // and leaves the other handler's state alone
+            var pressResult = await command.ProcessCommandAsync(_botClient, update, null, cancellationToken);
+            LogExecuted(command, chatId);
+            return pressResult.CallbackAnswer;
+        }
+        else if (cachedState != null)
         {
             _stateCache.RemoveEntry(chatId);
         }
@@ -122,10 +206,7 @@ public class TelegramUpdateProcessor
             commandState,
             cancellationToken);
 
-        _logger.LogDebug(
-            "Executed command \"{CommandName}\" in chat ChatId={ChatId}",
-            command.CommandName,
-            chatId);
+        LogExecuted(command, chatId);
 
         if (result.State == null)
         {
@@ -135,7 +216,15 @@ public class TelegramUpdateProcessor
         {
             _stateCache.SetEntry(chatId, command, result.State);
         }
+
+        return result.CallbackAnswer;
     }
+
+    private void LogExecuted(ITelegramBotCommandHandler command, long chatId) =>
+        _logger.LogDebug(
+            "Executed command \"{CommandName}\" in chat ChatId={ChatId}",
+            command.CommandName,
+            chatId);
 
     private async Task HandleUnauthenticatedUserAsync(
         long chatId,

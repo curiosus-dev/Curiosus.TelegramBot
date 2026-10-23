@@ -242,13 +242,14 @@ public class TelegramUpdateProcessorTests
     }
 
     [Fact]
-    public async Task ProcessAsync_UnauthenticatedUpdateWithoutMessage_StillPromptsAndRejects()
+    public async Task ProcessAsync_UnauthenticatedUpdateWithoutMessage_AnswersWithoutPrompting()
     {
         var processor = CreateProcessor();
         var command = CreateMockCommand();
 
         // An update carrying no Message at all (e.g. a callback query from an unknown chat).
-        // The second one used to dereference update.Message and fail before replying.
+        // The second one used to dereference update.Message and fail before replying; since 3.1.0 a press
+        // never starts the password flow and never posts to the chat.
         Update CreateCallbackUpdate() => new()
         {
             CallbackQuery = new CallbackQuery
@@ -262,9 +263,11 @@ public class TelegramUpdateProcessorTests
         await processor.ProcessAsync(CreateCallbackUpdate(), command.Object, CancellationToken.None);
         await processor.ProcessAsync(CreateCallbackUpdate(), command.Object, CancellationToken.None);
 
-        // First call prompts for the password, second one answers "incorrect password".
         _botClient.Verify(x => x.SendRequest(
             It.IsAny<SendMessageRequest>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        _botClient.Verify(x => x.SendRequest(
+            It.IsAny<AnswerCallbackQueryRequest>(),
             It.IsAny<CancellationToken>()), Times.Exactly(2));
 
         command.Verify(x => x.ProcessCommandAsync(

@@ -14,6 +14,12 @@ public record TelegramBotCommandProcessingResult
     public ITelegramBotCommandState? State { get; init; }
 
     /// <summary>
+    /// Answer to the pressed inline keyboard button when the update is a callback query.
+    /// The library answers every press after the handler returns; null answers without text.
+    /// </summary>
+    public TelegramBotCallbackAnswer? CallbackAnswer { get; init; }
+
+    /// <summary>
     /// Creates a new instance of a processing result without any state.
     /// Used for single-step commands that don't need to maintain state.
     /// </summary>
