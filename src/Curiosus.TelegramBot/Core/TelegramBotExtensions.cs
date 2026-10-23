@@ -113,6 +113,31 @@ public static class TelegramBotExtensions
     }
 
     /// <summary>
+    /// Gets the data of the pressed inline keyboard button.
+    /// </summary>
+    /// <param name="update">The update to read the callback data from.</param>
+    /// <returns>The callback data, or <see langword="null"/> when the update is not a callback query.</returns>
+    public static string? GetCallbackData(this Update update)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+
+        return update.CallbackQuery?.Data;
+    }
+
+    /// <summary>
+    /// Gets the payload of the pressed button: the callback data after the handler prefix (see <see cref="CallbackData"/>).
+    /// </summary>
+    /// <param name="update">The update to read the callback data from.</param>
+    /// <returns>
+    /// The payload, empty when the data is the prefix alone, or <see langword="null"/> when the update is not a callback
+    /// query with data.
+    /// </returns>
+    public static string? GetCallbackPayload(this Update update)
+    {
+        return CallbackData.TryParse(update.GetCallbackData(), out _, out var payload) ? payload : null;
+    }
+
+    /// <summary>
     /// Flattens a rich formatted message into plain text by rendering it to HTML and
     /// stripping the tags. The trailing newline left by the last block is trimmed.
     /// </summary>
