@@ -36,6 +36,8 @@ so a bot is a set of command handlers and nothing else:
 - **Authentication** — a private bot without extra code: allowed chat IDs pass right away, others need a password.
 - **HTTP proxy** — run the bot where Telegram is reachable only through a proxy.
 - **Built-in `/help`** — users see the list of commands without you maintaining it by hand.
+- **Inline buttons** — a handler declares a callback data prefix and gets the presses of its buttons; every press is
+  answered, so buttons never keep spinning — see [Inline buttons](#inline-buttons).
 - **Rich messages** — Bot API 10.1 rich messages reach handlers as plain text, so existing commands keep working.
 - **Hosting and DI** — one `AddTelegramBotInfrastructure` call; the bot runs as an `IHostedService` and invalid options
   fail at startup, not on the first message.
@@ -52,7 +54,7 @@ a bot reliably as a service:
 - **Private bots without extra code**: an allow-list plus a password challenge for everyone else.
 - **Plain Telegram.Bot inside**: handlers get `ITelegramBotClient` and `Update` as they are, nothing to relearn.
 
-Not there yet: inline keyboards and callback queries, persistent conversation state, scoped handlers, middleware
+Not there yet: keyboard builders, persistent conversation state, scoped handlers, middleware
 and webhooks are planned for 4.0 — see [Roadmap](#roadmap).
 
 ## Quick start
@@ -121,11 +123,12 @@ TelegramBotUpdateDispatcher          (IHostedService — starts polling, runs di
          ├─ TryAcquireLock()           (optional per-key exclusive lock)
          ├─ SemaphoreSlim              (MaxDegreeOfParallelism)
          └─► TelegramUpdateProcessor.ProcessAsync()
-              ├─ Auth gate             (AllowedChatIds / password challenge)
+              ├─ Auth gate             (AllowedChatIds / password challenge; button presses: answered only)
               ├─ Message type guard
               ├─ State lookup          (TelegramBotCommandStateCache)
               ├─ ITelegramBotCommandHandler.ProcessCommandAsync()
-              └─ State update/remove   (based on result.State)
+              ├─ State update/remove   (based on result.State)
+              └─ AnswerCallbackQuery   (button presses, with result.CallbackAnswer)
 ```
 
 Updates are polled, enqueued into a thread-safe `BlockingCollection<Update>`, and dispatched to handlers with configurable concurrency (`MaxDegreeOfParallelism`, default 10). If a handler returns state, the next message from that chat is routed to the same handler automatically.
@@ -214,6 +217,59 @@ The user can abort a multi-step flow at any time by sending another `/command` �
 
 States are kept per chat in memory and expire an hour after the last step; they don't survive a restart yet
 (persistent state storage is planned for 4.0).
+## Inline buttons
+
+A handler serves inline keyboard buttons by declaring a callback data prefix and listing
+`UpdateType.CallbackQuery` in `SupportedUpdateTypes`. A press of a button whose data is `prefix` or `prefix:payload`
+is routed to it through the same queue, locks and authorization as messages:
+
+```csharp
+public class ReturnButtonsHandler : ITelegramBotCommandHandler
+{
+    public string CommandName => "Return buttons";
+    public string CommandText => string.Empty;       // not a typed command: no /help entry, never matches text
+    public string? CallbackDataPrefix => "ret";
+    public IReadOnlySet<UpdateType> SupportedUpdateTypes { get; } =
+        new HashSet<UpdateType> { UpdateType.CallbackQuery };
+    public IReadOnlySet<MessageType> SupportedMessageTypes { get; } = new HashSet<MessageType>();
+
+    public async Task<TelegramBotCommandProcessingResult> ProcessCommandAsync(
+        ITelegramBotClient telegramBotClient, Update telegramUpdate,
+        ITelegramBotCommandState? commandState, CancellationToken cancellationToken)
+    {
+        var itemId = telegramUpdate.GetCallbackPayload();   // "42" for "ret:42"
+        // ... handle the press, e.g. edit the message's keyboard
+        return new TelegramBotCommandProcessingResult
+        {
+            CallbackAnswer = new TelegramBotCallbackAnswer($"Item {itemId} returned")
+        };
+    }
+}
+```
+
+Send the button with Telegram.Bot's keyboard types; `CallbackData.Create` checks Telegram's 64-byte limit when the
+message is built rather than when Telegram rejects it:
+
+```csharp
+var keyboard = new InlineKeyboardMarkup(
+    InlineKeyboardButton.WithCallbackData("Return", CallbackData.Create("ret", "42")));
+await botClient.SendMessage(chatId, "Returned parcel", replyMarkup: keyboard);
+```
+
+- **Routing**: the handler with the matching prefix; otherwise the handler holding the chat's conversation state, if it
+  supports callback queries (buttons of a multi-step dialog); otherwise the press is answered *"This button is no
+  longer supported."* and nothing is posted to the chat.
+- **Answers**: the library answers every press after the handler returns, with `result.CallbackAnswer` or without
+  text, also when the handler throws. A handler may answer itself first (to stop the spinner before long work); the
+  second answer is then ignored.
+- **Authorization**: by the chat of the button's message, channels included. A press in a chat that is not authorized
+  is answered *"Not authorized."* and never starts the password flow.
+- **State**: a press routed to another handler runs without state and leaves the chat's dialog untouched.
+- Prefixes are checked at startup: non-empty, without `:`, unique, and the handler must support callback queries.
+
+Keyboard builders and pagination helpers are planned — see
+[#41](https://github.com/curiosus-dev/Curiosus.TelegramBot/issues/41).
+
 ## Rich messages
 
 A rich formatted message (Bot API 10.1) carries its content in `Message.RichMessage` and leaves `Message.Text` unset, so it arrives as `MessageType.RichMessage` rather than `MessageType.Text`.
@@ -291,7 +347,7 @@ source and maps every package pattern to nuget.org, so restore behaves identical
 ## Roadmap
 
 Version 4.0 is tracked in the [v4 milestone](https://github.com/curiosus-dev/Curiosus.TelegramBot/milestone/1):
-inline keyboards and callback queries, pluggable storage for the update queue, conversation state and authorized chats,
+inline keyboard builders and pagination, pluggable storage for the update queue, conversation state and authorized chats,
 configurable state key (chat, user or topic), scoped command handlers, a middleware pipeline, webhooks as a separate
 package and ready-made controls (date/time pickers, lists, yes/no).
 
