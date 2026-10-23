@@ -29,7 +29,9 @@ In scope:
 
 Out of scope (non-goals):
 
-- keyboard builders and pagination helpers (issue #28 lists them; they come in a later minor release);
+- keyboard builders and pagination helpers — [#41](https://github.com/curiosus-dev/Curiosus.TelegramBot/issues/41);
+- silent handling of service messages that are answered with "Unsupported command" today (member joined, title
+  changed, …) — [#40](https://github.com/curiosus-dev/Curiosus.TelegramBot/issues/40);
 - buttons on inline-mode messages (`CallbackQuery.InlineMessageId` without `Message`) — the bot has no chat to
   authorize them against; such presses are answered and ignored;
 - per-user authorization inside a group or channel (`AllowedUserIds`): a press is authorized by its chat, like a
