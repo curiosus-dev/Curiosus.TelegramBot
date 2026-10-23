@@ -224,4 +224,153 @@ public class TelegramBotUpdateDispatcherTests
         Assert.Throws<InvalidOperationException>(() =>
             _queue.Enqueue(new Update { Id = 1 }));
     }
+
+    private static Mock<ITelegramBotCommandHandler> CreateButtonCommand(
+        string name,
+        string? prefix,
+        bool supportsCallbacks = true,
+        string text = "")
+    {
+        var mock = CreateMockCommand(name, text);
+        mock.Setup(x => x.CallbackDataPrefix).Returns(prefix);
+        var updateTypes = new HashSet<UpdateType> { UpdateType.Message };
+        if (supportsCallbacks)
+            updateTypes.Add(UpdateType.CallbackQuery);
+        mock.Setup(x => x.SupportedUpdateTypes).Returns(updateTypes);
+        return mock;
+    }
+
+    private static Update CreateCallbackUpdate(long chatId, string data)
+    {
+        return new Update
+        {
+            CallbackQuery = new CallbackQuery
+            {
+                Id = "query-1",
+                Data = data,
+                Message = new Message { Chat = new Chat { Id = chatId } }
+            }
+        };
+    }
+
+    [Fact]
+    public void ResolveCommand_CallbackWithMatchingPrefix_ReturnsHandler()
+    {
+        var returns = CreateButtonCommand("returns", "ret");
+        var dispatcher = CreateDispatcher(new[] { CreateMockCommand().Object, returns.Object });
+
+        var resolved = dispatcher.ResolveCommand(CreateCallbackUpdate(100, "ret:42:1"), 100);
+
+        Assert.Same(returns.Object, resolved);
+    }
+
+    [Fact]
+    public void ResolveCommand_CallbackPrefixFollowedByOtherChars_ReturnsNull()
+    {
+        var returns = CreateButtonCommand("returns", "ret");
+        var dispatcher = CreateDispatcher(new[] { returns.Object });
+
+        var resolved = dispatcher.ResolveCommand(CreateCallbackUpdate(100, "return:1"), 100);
+
+        Assert.Null(resolved);
+    }
+
+    [Fact]
+    public void ResolveCommand_CallbackWithoutPrefixAndStateHolderSupportsCallbacks_ReturnsStateHolder()
+    {
+        var dialog = CreateButtonCommand("dialog", null, text: "/dialog");
+        var dispatcher = CreateDispatcher(new[] { dialog.Object });
+        _stateCache.SetEntry(100, dialog.Object, new SimpleCommandState());
+
+        var resolved = dispatcher.ResolveCommand(CreateCallbackUpdate(100, "yes"), 100);
+
+        Assert.Same(dialog.Object, resolved);
+    }
+
+    [Fact]
+    public void ResolveCommand_CallbackWithoutPrefixAndStateHolderWithoutCallbacks_ReturnsNull()
+    {
+        var dialog = CreateMockCommand("dialog", "/dialog");
+        var dispatcher = CreateDispatcher(new[] { dialog.Object });
+        _stateCache.SetEntry(100, dialog.Object, new SimpleCommandState());
+
+        var resolved = dispatcher.ResolveCommand(CreateCallbackUpdate(100, "yes"), 100);
+
+        Assert.Null(resolved);
+    }
+
+    [Fact]
+    public void ResolveCommand_CallbackPrefixWinsOverStateHolder()
+    {
+        var dialog = CreateButtonCommand("dialog", null, text: "/dialog");
+        var returns = CreateButtonCommand("returns", "ret");
+        var dispatcher = CreateDispatcher(new[] { dialog.Object, returns.Object });
+        _stateCache.SetEntry(100, dialog.Object, new SimpleCommandState());
+
+        var resolved = dispatcher.ResolveCommand(CreateCallbackUpdate(100, "ret:1"), 100);
+
+        Assert.Same(returns.Object, resolved);
+    }
+
+    [Fact]
+    public void Constructor_DuplicateCallbackPrefix_ThrowsNamingHandlers()
+    {
+        var first = CreateButtonCommand("first returns", "ret");
+        var second = CreateButtonCommand("second returns", "ret");
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => CreateDispatcher(new[] { first.Object, second.Object }));
+
+        Assert.Contains("first returns", exception.Message);
+        Assert.Contains("second returns", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("a:b")]
+    [InlineData("")]
+    public void Constructor_InvalidCallbackPrefix_Throws(string prefix)
+    {
+        var returns = CreateButtonCommand("returns", prefix);
+
+        Assert.Throws<InvalidOperationException>(() => CreateDispatcher(new[] { returns.Object }));
+    }
+
+    [Fact]
+    public void Constructor_PrefixWithoutCallbackQueryUpdateType_Throws()
+    {
+        var returns = CreateButtonCommand("returns", "ret", supportsCallbacks: false);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => CreateDispatcher(new[] { returns.Object }));
+
+        Assert.Contains("returns", exception.Message);
+    }
+
+    [Fact]
+    public void ResolveCommand_MessageMatchingEmptyCommandText_ReturnsNull()
+    {
+        var returns = CreateButtonCommand("returns", "ret");
+        var dispatcher = CreateDispatcher(new[] { returns.Object });
+
+        var resolved = dispatcher.ResolveCommand(CreateRichUpdate(100, "hello"), 100);
+
+        Assert.Null(resolved);
+    }
+
+    [Fact]
+    public async Task DispatchUpdateAsync_UnknownCallback_AnswersAndSendsNoMessage()
+    {
+        var returns = CreateButtonCommand("returns", "ret");
+        var dispatcher = CreateDispatcher(new[] { returns.Object });
+
+        await dispatcher.DispatchUpdateAsync(CreateCallbackUpdate(100, "old:1"), CancellationToken.None);
+
+        _botClient.Verify(
+            x => x.SendRequest(
+                It.Is<Telegram.Bot.Requests.AnswerCallbackQueryRequest>(r => r.CallbackQueryId == "query-1"),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        _botClient.Verify(
+            x => x.SendRequest(It.IsAny<Telegram.Bot.Requests.SendMessageRequest>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
 }

@@ -20,6 +20,7 @@ namespace Curiosus.TelegramBot;
 public class TelegramBotUpdateDispatcher : IHostedService
 {
     private const int LockSpinIterations = 100;
+    private const string UnsupportedButtonText = "This button is no longer supported.";
     private static readonly TimeSpan LockWaitDelay = TimeSpan.FromMilliseconds(50);
 
     private readonly ILogger<TelegramBotUpdateDispatcher> _logger;
@@ -28,6 +29,7 @@ public class TelegramBotUpdateDispatcher : IHostedService
     private readonly ITelegramBotClient _botClient;
     private readonly TelegramBotCommandStateCache _stateCache;
     private readonly IReadOnlyList<ITelegramBotCommandHandler> _telegramCommands;
+    private readonly IReadOnlyList<ITelegramBotCommandHandler> _callbackHandlers;
     private readonly ISet<UpdateType> _supportedUpdateTypes;
 
     private CancellationTokenSource _cancellationTokenSource = null!;
@@ -65,12 +67,52 @@ public class TelegramBotUpdateDispatcher : IHostedService
 
         // the longest command text wins when several match, e.g. "/report daily" over "/report"
         _telegramCommands = commands.OrderByDescending(x => x.CommandText.Length).ToArray();
+        _callbackHandlers = GetCallbackHandlers(_telegramCommands);
         _supportedUpdateTypes = new HashSet<UpdateType>(_telegramCommands
             .SelectMany(x => x.SupportedUpdateTypes)
             .Distinct()
             .ToArray());
 
         _parallelismSemaphore = new SemaphoreSlim(botOptions.MaxDegreeOfParallelism);
+    }
+
+    /// <summary>
+    /// Validates the callback prefixes and orders the handlers that declare one, the longest prefix first.
+    /// </summary>
+    private static IReadOnlyList<ITelegramBotCommandHandler> GetCallbackHandlers(
+        IEnumerable<ITelegramBotCommandHandler> commands)
+    {
+        var handlers = commands.Where(x => x.CallbackDataPrefix != null).ToArray();
+
+        foreach (var handler in handlers)
+        {
+            if (!CallbackData.IsValidPrefix(handler.CallbackDataPrefix))
+            {
+                throw new InvalidOperationException(
+                    $"Command \"{handler.CommandName}\" has an invalid callback data prefix " +
+                    $"\"{handler.CallbackDataPrefix}\": it must be non-empty and must not contain '{CallbackData.Separator}'.");
+            }
+
+            if (!handler.SupportedUpdateTypes.Contains(UpdateType.CallbackQuery))
+            {
+                throw new InvalidOperationException(
+                    $"Command \"{handler.CommandName}\" declares callback data prefix \"{handler.CallbackDataPrefix}\" " +
+                    $"but does not list {nameof(UpdateType.CallbackQuery)} in {nameof(handler.SupportedUpdateTypes)}: " +
+                    "it would never receive its button presses.");
+            }
+        }
+
+        var duplicate = handlers
+            .GroupBy(x => x.CallbackDataPrefix, StringComparer.Ordinal)
+            .FirstOrDefault(x => x.Count() > 1);
+        if (duplicate != null)
+        {
+            throw new InvalidOperationException(
+                $"Callback data prefix \"{duplicate.Key}\" is declared by several commands: " +
+                String.Join(", ", duplicate.Select(x => $"\"{x.CommandName}\"")) + ".");
+        }
+
+        return handlers.OrderByDescending(x => x.CallbackDataPrefix!.Length).ToArray();
     }
 
     /// <inheritdoc />
@@ -151,14 +193,17 @@ public class TelegramBotUpdateDispatcher : IHostedService
         _logger.LogDebug("Update dispatching finished");
     }
 
-    private async Task DispatchUpdateAsync(Update update, CancellationToken cancellationToken)
+    internal async Task DispatchUpdateAsync(Update update, CancellationToken cancellationToken)
     {
         var chatId = update.GetChatId();
         var command = ResolveCommand(update, chatId);
 
         if (command == null)
         {
-            await SendUnsupportedCommandNotificationAsync(chatId, update, cancellationToken);
+            if (update.CallbackQuery != null)
+                await AnswerUnsupportedCallbackAsync(update.CallbackQuery, cancellationToken);
+            else
+                await SendUnsupportedCommandNotificationAsync(chatId, update, cancellationToken);
             return;
         }
 
@@ -218,6 +263,9 @@ public class TelegramBotUpdateDispatcher : IHostedService
 
     internal ITelegramBotCommandHandler? ResolveCommand(Update update, long chatId)
     {
+        if (update.CallbackQuery != null)
+            return ResolveCallbackHandler(update.CallbackQuery, chatId);
+
         var message = update.Message;
         if (message == null)
             return null;
@@ -250,6 +298,45 @@ public class TelegramBotUpdateDispatcher : IHostedService
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// A press goes to the handler whose prefix matches the button's data, otherwise to the handler holding the chat's
+    /// conversation state when it accepts callback queries (buttons of a multi-step dialog).
+    /// </summary>
+    private ITelegramBotCommandHandler? ResolveCallbackHandler(CallbackQuery callbackQuery, long chatId)
+    {
+        var data = callbackQuery.Data;
+        if (!String.IsNullOrEmpty(data))
+        {
+            var handler = _callbackHandlers.FirstOrDefault(x => CallbackData.Matches(data, x.CallbackDataPrefix!));
+            if (handler != null)
+                return handler;
+        }
+
+        var stateHolder = _stateCache.GetEntry(chatId)?.CommandHandler;
+        return stateHolder?.SupportedUpdateTypes.Contains(UpdateType.CallbackQuery) == true ? stateHolder : null;
+    }
+
+    private async Task AnswerUnsupportedCallbackAsync(CallbackQuery callbackQuery, CancellationToken cancellationToken)
+    {
+        // a press is answered in place: posting "Unsupported command" to a channel or a group would be noise
+        _logger.LogDebug(
+            "Unsupported button \"{CallbackData}\" in chat ChatId={ChatId}",
+            callbackQuery.Data,
+            callbackQuery.Message?.Chat.Id);
+
+        try
+        {
+            await _botClient.AnswerCallbackQuery(
+                callbackQuery.Id,
+                UnsupportedButtonText,
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to answer unsupported button \"{CallbackData}\"", callbackQuery.Data);
+        }
     }
 
     private ITelegramBotCommandHandler? FindCommand(string messageText) =>

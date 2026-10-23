@@ -146,4 +146,18 @@ public class HelpCommandHandlerTests
     {
         Assert.Throws<ArgumentNullException>(() => new HelpCommandHandler(null!));
     }
+
+    [Fact]
+    public void BuildHelpMessage_ButtonOnlyHandler_NotListed()
+    {
+        var ping = CreateMockHandler("Ping", "/ping");
+        var buttons = CreateMockHandler("Return buttons", string.Empty);
+        var (helpHandler, provider) = BuildHandler(ping.Object, buttons.Object);
+        using var _ = provider;
+
+        var message = helpHandler.BuildHelpMessage();
+
+        Assert.Contains("/ping", message);
+        Assert.DoesNotContain("Return buttons", message);
+    }
 }

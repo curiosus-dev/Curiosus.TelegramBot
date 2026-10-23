@@ -16,8 +16,18 @@ public interface ITelegramBotCommandHandler
 
     /// <summary>
     /// Gets the text that triggers this command (e.g. "/command_name").
+    /// An empty string means the handler is not a typed command (e.g. it serves only buttons):
+    /// it never matches a message and is not listed by <c>/help</c>.
     /// </summary>
     string CommandText { get; }
+
+    /// <summary>
+    /// Gets the prefix of inline keyboard buttons this handler serves: presses of buttons whose callback data is
+    /// <c>prefix</c> or <c>prefix:payload</c> are routed here (build the data with <see cref="CallbackData.Create"/>).
+    /// The handler must also list <see cref="UpdateType.CallbackQuery"/> in <see cref="SupportedUpdateTypes"/>.
+    /// Null (the default) — the handler serves no buttons of its own.
+    /// </summary>
+    string? CallbackDataPrefix => null;
 
     /// <summary>
     /// Gets the set of Telegram update types that this command can handle.
