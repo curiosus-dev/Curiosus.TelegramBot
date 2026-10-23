@@ -52,7 +52,7 @@ public sealed class HelpCommandHandler : ITelegramBotCommandHandler
     {
         var commandHandlers = _serviceProvider.GetServices<ITelegramBotCommandHandler>();
         var commands = commandHandlers
-            .Where(h => h != this)
+            .Where(h => h != this && !String.IsNullOrEmpty(h.CommandText))
             .OrderBy(h => h.CommandText, StringComparer.OrdinalIgnoreCase)
             .ToList();
 

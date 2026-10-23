@@ -1,5 +1,31 @@
 # Changelog
 
+## [3.1.0] - 2026-10-23
+
+### Added
+
+- Inline keyboard buttons (callback queries) reach command handlers (#28):
+  - `ITelegramBotCommandHandler.CallbackDataPrefix` — a handler gets presses of buttons whose callback data is
+    `prefix` or `prefix:payload`; it must list `UpdateType.CallbackQuery` in `SupportedUpdateTypes`. Without a matching
+    prefix a press goes to the handler holding the chat's conversation state, if it supports callback queries.
+    Prefixes are validated when the dispatcher is created (non-empty, no `:`, unique).
+  - Every press is answered after the handler returns, also when it throws: `TelegramBotCommandProcessingResult.CallbackAnswer`
+    (`TelegramBotCallbackAnswer`: text, alert) sets the answer; a handler that answered itself is tolerated.
+  - `CallbackData.Create` / `TryParse` build and parse callback data and reject data over Telegram's 64-byte limit.
+  - `TelegramBotExtensions.GetCallbackData()` / `GetCallbackPayload()`.
+- `ITelegramBotCommandHandler.CommandText` is nullable: null (or empty) marks a handler that is not a typed command
+  (e.g. buttons only): it never matches a message and is not listed by `/help`. Existing implementations returning
+  `string` compile unchanged; code reading `CommandText` gets a nullable warning.
+
+### Changed
+
+- A button press in a chat that is not authorized is answered *"Not authorized."* instead of starting the password flow
+  (*"Hi! Your chat ID is …"*), and a press nobody handles is answered *"This button is no longer supported."* instead of
+  posting *"Unsupported command"* to the chat.
+- A button press routed to a handler other than the one holding the chat's conversation state no longer clears that state.
+- The dispatcher reads `CallbackDataPrefix` of every handler at startup: tests that build it with `MockBehavior.Strict`
+  handler mocks must set up `CallbackDataPrefix` (returning `null`); loose mocks and real handlers need no change.
+
 ## [3.0.1] - 2026-10-03
 
 ### Fixed

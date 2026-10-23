@@ -38,6 +38,9 @@ Telegram API (polling)
 - `TelegramBotCommandProcessingResult` — record returned by handlers; `WithoutState()` or `WithSimpleState()`.
 - `TelegramBotOptions` — configuration record with self-validation (`ApiToken`, `Password`, `AllowedChatIds`, `MaxDegreeOfParallelism`, `QueuePersistenceFilePath`). Token *format* is not validated here — `AddTelegramBotInfrastructure` builds `TelegramBotClientOptions` eagerly so a malformed token throws at registration time without duplicating Telegram.Bot's undocumented format rule.
 - `TelegramBotMessageTypes.TextOrRich` — shared `SupportedMessageTypes` set covering `MessageType.Text` and `MessageType.RichMessage`.
+- Callback queries (inline buttons): routed by `ITelegramBotCommandHandler.CallbackDataPrefix`, then to the chat's state
+  holder; `TelegramUpdateProcessor` answers every press (`TelegramBotCommandProcessingResult.CallbackAnswer`) and never
+  posts to the chat for presses (no password prompt, no "Unsupported command"). `CallbackData` keeps data within 64 bytes.
 - `TelegramBotExtensions.GetMessageText()` / `GetRichBlocks()` — read message text with a rich-message fallback (rich messages leave `Message.Text` null), or reach the structured blocks.
 
 **DI registration:**

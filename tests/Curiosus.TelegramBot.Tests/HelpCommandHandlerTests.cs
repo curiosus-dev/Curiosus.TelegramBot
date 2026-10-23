@@ -10,7 +10,7 @@ namespace Curiosus.TelegramBot.Tests;
 public class HelpCommandHandlerTests
 {
     private static Mock<ITelegramBotCommandHandler> CreateMockHandler(
-        string commandName, string commandText)
+        string commandName, string? commandText)
     {
         var mock = new Mock<ITelegramBotCommandHandler>();
         mock.Setup(h => h.CommandName).Returns(commandName);
@@ -145,5 +145,21 @@ public class HelpCommandHandlerTests
     public void Constructor_WithNullServiceProvider_Throws()
     {
         Assert.Throws<ArgumentNullException>(() => new HelpCommandHandler(null!));
+    }
+
+    [Fact]
+    public void BuildHelpMessage_ButtonOnlyHandler_NotListed()
+    {
+        var ping = CreateMockHandler("Ping", "/ping");
+        var buttons = CreateMockHandler("Return buttons", null);
+        var legacyButtons = CreateMockHandler("Legacy buttons", string.Empty);
+        var (helpHandler, provider) = BuildHandler(ping.Object, buttons.Object, legacyButtons.Object);
+        using var _ = provider;
+
+        var message = helpHandler.BuildHelpMessage();
+
+        Assert.Contains("/ping", message);
+        Assert.DoesNotContain("Return buttons", message);
+        Assert.DoesNotContain("Legacy buttons", message);
     }
 }
