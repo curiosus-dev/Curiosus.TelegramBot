@@ -43,7 +43,7 @@ public class TelegramBotUpdateDispatcherTests
 
     private static Mock<ITelegramBotCommandHandler> CreateMockCommand(
         string name = "test",
-        string text = "/test")
+        string? text = "/test")
     {
         var mock = new Mock<ITelegramBotCommandHandler>();
         mock.Setup(x => x.CommandName).Returns(name);
@@ -229,7 +229,7 @@ public class TelegramBotUpdateDispatcherTests
         string name,
         string? prefix,
         bool supportsCallbacks = true,
-        string text = "")
+        string? text = null)
     {
         var mock = CreateMockCommand(name, text);
         mock.Setup(x => x.CallbackDataPrefix).Returns(prefix);
@@ -346,9 +346,19 @@ public class TelegramBotUpdateDispatcherTests
     }
 
     [Fact]
-    public void ResolveCommand_MessageMatchingEmptyCommandText_ReturnsNull()
+    public void ResolveCommand_MessageWithButtonOnlyHandlers_ReturnsNull()
     {
         var returns = CreateButtonCommand("returns", "ret");
+        var legacy = CreateButtonCommand("legacy buttons", "old", text: string.Empty);
+        var dispatcher = CreateDispatcher(new[] { returns.Object, legacy.Object, CreateMockCommand().Object });
+
+        Assert.Null(dispatcher.ResolveCommand(CreateRichUpdate(100, "hello"), 100));
+    }
+
+    [Fact]
+    public void ResolveCommand_MessageMatchingEmptyCommandText_ReturnsNull()
+    {
+        var returns = CreateButtonCommand("returns", "ret", text: string.Empty);
         var dispatcher = CreateDispatcher(new[] { returns.Object });
 
         var resolved = dispatcher.ResolveCommand(CreateRichUpdate(100, "hello"), 100);

@@ -16,10 +16,10 @@ public interface ITelegramBotCommandHandler
 
     /// <summary>
     /// Gets the text that triggers this command (e.g. "/command_name").
-    /// An empty string means the handler is not a typed command (e.g. it serves only buttons):
+    /// Null (or empty) means the handler is not a typed command, e.g. it serves only buttons:
     /// it never matches a message and is not listed by <c>/help</c>.
     /// </summary>
-    string CommandText { get; }
+    string? CommandText { get; }
 
     /// <summary>
     /// Gets the prefix of inline keyboard buttons this handler serves: presses of buttons whose callback data is

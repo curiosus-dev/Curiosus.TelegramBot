@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace Curiosus.TelegramBot;
@@ -30,12 +31,8 @@ public static class CallbackData
     /// </exception>
     public static string Create(string prefix, string? payload = null)
     {
-        if (!IsValidPrefix(prefix))
-        {
-            throw new ArgumentException(
-                $"Callback data prefix must be non-empty and must not contain '{Separator}'.",
-                nameof(prefix));
-        }
+        if (!TryValidatePrefix(prefix, out var error))
+            throw new ArgumentException(error, nameof(prefix));
 
         var data = payload == null ? prefix : prefix + Separator + payload;
 
@@ -80,8 +77,26 @@ public static class CallbackData
         return true;
     }
 
-    internal static bool IsValidPrefix(string? prefix) =>
-        !String.IsNullOrEmpty(prefix) && !prefix.Contains(Separator);
+    /// <summary>
+    /// Checks a handler prefix; the caller decides which exception to throw with <paramref name="error"/>.
+    /// </summary>
+    internal static bool TryValidatePrefix(string? prefix, [NotNullWhen(false)] out string? error)
+    {
+        if (String.IsNullOrEmpty(prefix))
+        {
+            error = "Callback data prefix must be non-empty.";
+            return false;
+        }
+
+        if (prefix.Contains(Separator))
+        {
+            error = $"Callback data prefix \"{prefix}\" must not contain '{Separator}'.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
 
     /// <summary>
     /// Checks that the data is the prefix itself or the prefix followed by <see cref="Separator"/>,

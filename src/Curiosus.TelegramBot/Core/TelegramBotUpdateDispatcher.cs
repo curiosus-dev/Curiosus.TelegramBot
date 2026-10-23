@@ -66,7 +66,7 @@ public class TelegramBotUpdateDispatcher : IHostedService
         _stateCache = stateCache;
 
         // the longest command text wins when several match, e.g. "/report daily" over "/report"
-        _telegramCommands = commands.OrderByDescending(x => x.CommandText.Length).ToArray();
+        _telegramCommands = commands.OrderByDescending(x => x.CommandText?.Length ?? 0).ToArray();
         _callbackHandlers = GetCallbackHandlers(_telegramCommands);
         _supportedUpdateTypes = new HashSet<UpdateType>(_telegramCommands
             .SelectMany(x => x.SupportedUpdateTypes)
@@ -86,12 +86,8 @@ public class TelegramBotUpdateDispatcher : IHostedService
 
         foreach (var handler in handlers)
         {
-            if (!CallbackData.IsValidPrefix(handler.CallbackDataPrefix))
-            {
-                throw new InvalidOperationException(
-                    $"Command \"{handler.CommandName}\" has an invalid callback data prefix " +
-                    $"\"{handler.CallbackDataPrefix}\": it must be non-empty and must not contain '{CallbackData.Separator}'.");
-            }
+            if (!CallbackData.TryValidatePrefix(handler.CallbackDataPrefix, out var error))
+                throw new InvalidOperationException($"Command \"{handler.CommandName}\": {error}");
 
             if (!handler.SupportedUpdateTypes.Contains(UpdateType.CallbackQuery))
             {
@@ -201,9 +197,14 @@ public class TelegramBotUpdateDispatcher : IHostedService
         if (command == null)
         {
             if (update.CallbackQuery != null)
+            {
                 await AnswerUnsupportedCallbackAsync(update.CallbackQuery, cancellationToken);
+            }
             else
+            {
                 await SendUnsupportedCommandNotificationAsync(chatId, update, cancellationToken);
+            }
+
             return;
         }
 
@@ -229,7 +230,7 @@ public class TelegramBotUpdateDispatcher : IHostedService
             ["ProcessorId"] = processorId,
             ["UpdateId"] = update.Id,
             ["ChatId"] = chatId,
-            ["Command"] = command.CommandText
+            ["Command"] = command.CommandText ?? command.CommandName
         });
 
         _ = _updateProcessor.ProcessAsync(update, command, cancellationToken)
@@ -346,7 +347,7 @@ public class TelegramBotUpdateDispatcher : IHostedService
     /// Checks that the message starts with the whole command text: the command is followed by the end of the message,
     /// whitespace or <c>@</c> (as in <c>/ping@MyBot</c>), so <c>/pinger</c> does not match <c>/ping</c>.
     /// </summary>
-    internal static bool IsCommandMatch(string messageText, string commandText)
+    internal static bool IsCommandMatch(string messageText, string? commandText)
     {
         if (String.IsNullOrEmpty(commandText) || !messageText.StartsWith(commandText, StringComparison.Ordinal))
             return false;

@@ -43,7 +43,7 @@ public class CallbackQueryProcessingTests
     {
         var mock = new Mock<ITelegramBotCommandHandler>();
         mock.Setup(x => x.CommandName).Returns(name);
-        mock.Setup(x => x.CommandText).Returns(string.Empty);
+        mock.Setup(x => x.CommandText).Returns((string?)null);
         mock.Setup(x => x.CallbackDataPrefix).Returns(prefix);
         mock.Setup(x => x.SupportedUpdateTypes)
             .Returns(new HashSet<UpdateType> { UpdateType.Message, UpdateType.CallbackQuery });

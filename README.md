@@ -227,7 +227,7 @@ is routed to it through the same queue, locks and authorization as messages:
 public class ReturnButtonsHandler : ITelegramBotCommandHandler
 {
     public string CommandName => "Return buttons";
-    public string CommandText => string.Empty;       // not a typed command: no /help entry, never matches text
+    public string? CommandText => null;              // not a typed command: no /help entry, never matches text
     public string? CallbackDataPrefix => "ret";
     public IReadOnlySet<UpdateType> SupportedUpdateTypes { get; } =
         new HashSet<UpdateType> { UpdateType.CallbackQuery };

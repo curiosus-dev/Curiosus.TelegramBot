@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [3.1.0] - 2026-10-23
 
 ### Added
 
@@ -13,8 +13,9 @@
     (`TelegramBotCallbackAnswer`: text, alert) sets the answer; a handler that answered itself is tolerated.
   - `CallbackData.Create` / `TryParse` build and parse callback data and reject data over Telegram's 64-byte limit.
   - `TelegramBotExtensions.GetCallbackData()` / `GetCallbackPayload()`.
-- An empty `CommandText` marks a handler that is not a typed command (e.g. buttons only): it never matches a message and
-  is not listed by `/help`.
+- `ITelegramBotCommandHandler.CommandText` is nullable: null (or empty) marks a handler that is not a typed command
+  (e.g. buttons only): it never matches a message and is not listed by `/help`. Existing implementations returning
+  `string` compile unchanged; code reading `CommandText` gets a nullable warning.
 
 ### Changed
 
