@@ -42,7 +42,7 @@ dotnet cake --target=GitHubReleases --githubReleaseDryRun   # preview release no
 For a focused loop on one test, plain `dotnet test <project> --filter "FullyQualifiedName~Name"` is fine.
 
 Tests run on every supported runtime: test projects target all .NET versions the libraries support and CI installs
-(currently `net8.0`, `net9.0`, `net10.0`); `netstandard` targets are covered by the lowest of them.
+(currently `net9.0`, `net10.0`); `netstandard` targets are covered by the lowest of them.
 A change is done when tests pass on all of them, not only on the one used locally.
 
 CI runs `CoverageReport`: the coverage summary is in the pull request run summary, coverage badges
